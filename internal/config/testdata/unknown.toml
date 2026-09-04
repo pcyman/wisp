@@ -1,0 +1,6 @@
+schema_version = 1
+unexpected = true
+
+[aws.aliases.development]
+profile = "development"
+role_arn = "arn:aws:iam::123456789012:role/Wisp"

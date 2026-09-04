@@ -1,0 +1,140 @@
+package config
+
+import (
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+)
+
+func TestLoadResolvesPhysicalPathsAndWarnings(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	configDir := filepath.Join(root, "configuration")
+	realMount := filepath.Join(root, "real mount:repo")
+	linkMount := filepath.Join(configDir, "linked-repo")
+	awsConfig := filepath.Join(root, "aws", "config")
+	awsCache := filepath.Join(root, "aws", "cache")
+	for _, directory := range []string{configDir, realMount, filepath.Dir(awsConfig), awsCache} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(awsConfig, []byte("[profile development]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(realMount, linkMount); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(configDir, "config.toml")
+	contents := `schema_version = 1
+
+[aws]
+host_config_path = "../aws/config"
+sso_cache_path = "../aws/cache"
+
+[aws.aliases.development]
+profile = "development"
+role_arn = "arn:aws:iam::123456789012:role/Wisp"
+
+[[mounts]]
+source = "linked-repo"
+target = "/workspace/repos/repo"
+`
+	if err := os.WriteFile(configPath, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Load(configPath, Environment{Home: root})
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if string(result.Snapshot) != contents {
+		t.Fatal("Load() did not retain exact config bytes")
+	}
+	physicalMount, err := filepath.EvalSymlinks(realMount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Config.Mounts[0].Source != physicalMount {
+		t.Fatalf("mount source = %q, want %q", result.Config.Mounts[0].Source, physicalMount)
+	}
+	if len(result.Warnings) != 2 {
+		t.Fatalf("warnings = %q, want OpenCode config and auth warnings", result.Warnings)
+	}
+}
+
+func TestLoadExplicitOpenCodePathMustExist(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	awsConfig, awsCache := makeAWSPaths(t, root)
+	configPath := filepath.Join(root, "config.toml")
+	contents := "schema_version = 1\n[opencode]\nconfig_path = \"missing\"\n[aws]\nhost_config_path = " + tomlQuote(awsConfig) + "\nsso_cache_path = " + tomlQuote(awsCache) + validAliasTOML
+	if err := os.WriteFile(configPath, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(configPath, Environment{Home: root})
+	if err == nil || !strings.Contains(err.Error(), "opencode.config_path") {
+		t.Fatalf("Load() error = %v", err)
+	}
+}
+
+func TestLoadReturnsCanonicalConfigPath(t *testing.T) {
+	root := t.TempDir()
+	realDir := filepath.Join(root, "real")
+	if err := os.Mkdir(realDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	awsConfig, awsCache := makeAWSPaths(t, root)
+	realPath := filepath.Join(realDir, "config.toml")
+	contents := "schema_version = 1\n[aws]\nhost_config_path = " + tomlQuote(awsConfig) + "sso_cache_path = " + tomlQuote(awsCache) + validAliasTOML
+	if err := os.WriteFile(realPath, []byte(contents), 0600); err != nil {
+		t.Fatal(err)
+	}
+	linkPath := filepath.Join(root, "linked.toml")
+	if err := os.Symlink(realPath, linkPath); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Load(linkPath, Environment{Home: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Path != realPath {
+		t.Fatalf("config path = %q, want %q", result.Path, realPath)
+	}
+}
+
+func TestLoadRejectsRelativeXDGDataHome(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	awsConfig, awsCache := makeAWSPaths(t, root)
+	configPath := filepath.Join(root, "config.toml")
+	contents := "schema_version = 1\n[aws]\nhost_config_path = " + tomlQuote(awsConfig) + "\nsso_cache_path = " + tomlQuote(awsCache) + validAliasTOML
+	if err := os.WriteFile(configPath, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(configPath, Environment{Home: root, XDGDataHome: "relative"})
+	if err == nil || !strings.Contains(err.Error(), "XDG_DATA_HOME must be an absolute path") {
+		t.Fatalf("Load() error = %v", err)
+	}
+}
+
+func makeAWSPaths(t *testing.T, root string) (string, string) {
+	t.Helper()
+	config := filepath.Join(root, "aws", "config")
+	cache := filepath.Join(root, "aws", "cache")
+	if err := os.MkdirAll(filepath.Dir(config), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(cache, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config, []byte(""), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return config, cache
+}
+
+func tomlQuote(value string) string {
+	return strconv.Quote(value) + "\n"
+}
