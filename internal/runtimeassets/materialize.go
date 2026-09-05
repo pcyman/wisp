@@ -3,6 +3,7 @@
 package runtimeassets
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -12,7 +13,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/gofrs/flock"
+	"wisp/internal/lock"
 )
 
 const directoryMode fs.FileMode = 0o700
@@ -71,12 +72,12 @@ func Materialize(source fs.FS, env Environment) (dir string, err error) {
 	}
 
 	target := filepath.Join(cache, hash)
-	lock := flock.New(filepath.Join(cache, "."+hash+".lock"), flock.SetPermissions(0o600))
-	if err := lock.Lock(); err != nil {
+	assetLock, err := lock.Acquire(context.Background(), cache, "."+hash)
+	if err != nil {
 		return "", fmt.Errorf("lock runtime assets %s: %w", hash, err)
 	}
 	defer func() {
-		if closeErr := lock.Close(); err == nil && closeErr != nil {
+		if closeErr := assetLock.Close(); err == nil && closeErr != nil {
 			dir = ""
 			err = fmt.Errorf("unlock runtime assets %s: %w", hash, closeErr)
 		}

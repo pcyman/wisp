@@ -1,6 +1,7 @@
 package runtimeassets
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -12,7 +13,7 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/gofrs/flock"
+	"wisp/internal/lock"
 )
 
 func TestMaterializeContentAddressedTreeAndModes(t *testing.T) {
@@ -296,8 +297,8 @@ func TestMaterializeWaitsForPerHashAdvisoryLock(t *testing.T) {
 	if err := ensureCacheDirectories(cache); err != nil {
 		t.Fatal(err)
 	}
-	lock := flock.New(filepath.Join(cache, "."+contentHash(assets)+".lock"), flock.SetPermissions(0o600))
-	if err := lock.Lock(); err != nil {
+	assetLock, err := lock.Acquire(context.Background(), cache, "."+contentHash(assets))
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -311,7 +312,7 @@ func TestMaterializeWaitsForPerHashAdvisoryLock(t *testing.T) {
 		t.Fatalf("Materialize() returned while advisory lock was held: %v", err)
 	case <-time.After(100 * time.Millisecond):
 	}
-	if err := lock.Close(); err != nil {
+	if err := assetLock.Close(); err != nil {
 		t.Fatal(err)
 	}
 	select {
