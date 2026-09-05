@@ -221,6 +221,20 @@ func TestAWSCheckUsesCredentialsOnlyLifecycle(t *testing.T) {
 	}
 }
 
+func TestAWSCheckRejectsDisabledAWSBeforeDocker(t *testing.T) {
+	root, configPath, _ := applicationFixture(t)
+	if err := os.WriteFile(configPath, []byte("schema_version = 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	runner := &recordingRunner{}
+	application := newFixtureApp(t, root, runner, &bytes.Buffer{}, &stderr)
+	status := application.Execute(context.Background(), cli.Request{Command: cli.CommandAWSCheck, AWSCheck: cli.AWSCheckRequest{ConfigPath: configPath}})
+	if status != 1 || !strings.Contains(stderr.String(), "AWS support is not enabled") || len(runner.commands) != 0 {
+		t.Fatalf("status=%d commands=%d stderr=%q", status, len(runner.commands), stderr.String())
+	}
+}
+
 func TestBrokerStartupLogsRedactAuthorizationToken(t *testing.T) {
 	root, configPath, projectDir := applicationFixture(t)
 	var stderr bytes.Buffer

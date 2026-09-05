@@ -7,7 +7,7 @@ const (
 	DefaultBuildCPUs        = 4
 	DefaultBoto3Version     = "1.35.99"
 	DefaultAWSDuration      = 3600
-	InitReminder            = "configure at least one AWS alias before running wisp"
+	InitReminder            = "AWS access is disabled until an [aws] table and alias are configured"
 )
 
 // RawConfig preserves whether scalar TOML keys were present.
@@ -46,10 +46,11 @@ type RawOpenCodeConfig struct {
 }
 
 type RawAWSConfig struct {
-	Default        *string                      `toml:"default"`
-	HostConfigPath *string                      `toml:"host_config_path"`
-	SSOCachePath   *string                      `toml:"sso_cache_path"`
-	Aliases        map[string]RawAWSAliasConfig `toml:"aliases"`
+	Default             *string                      `toml:"default"`
+	HostConfigPath      *string                      `toml:"host_config_path"`
+	HostCredentialsPath *string                      `toml:"host_credentials_path"`
+	SSOCachePath        *string                      `toml:"sso_cache_path"`
+	Aliases             map[string]RawAWSAliasConfig `toml:"aliases"`
 }
 
 type RawAWSAliasConfig struct {
@@ -105,12 +106,15 @@ type OpenCodeConfig struct {
 }
 
 type AWSConfig struct {
-	Default                string
-	HostConfigPath         string
-	HostConfigPathExplicit bool
-	SSOCachePath           string
-	SSOCachePathExplicit   bool
-	Aliases                map[string]AWSAliasConfig
+	Enabled                     bool
+	Default                     string
+	HostConfigPath              string
+	HostConfigPathExplicit      bool
+	HostCredentialsPath         string
+	HostCredentialsPathExplicit bool
+	SSOCachePath                string
+	SSOCachePathExplicit        bool
+	Aliases                     map[string]AWSAliasConfig
 }
 
 type AWSAliasConfig struct {

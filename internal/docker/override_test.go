@@ -74,10 +74,31 @@ func TestCredentialsOverrideOmitsSandbox(t *testing.T) {
 	}
 }
 
+func TestRunOverrideEnablesAWSOnlyWithCredentialMounts(t *testing.T) {
+	project, _ := Bind("/project", "/workspace/current", false)
+	disabled, err := NewRunOverride([]string{"opencode"}, nil, []Mount{project})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := disabled.Services["credentials"]; ok || disabled.Services["sandbox"].NetworkMode != "" || len(disabled.Services["sandbox"].Environment) != 0 {
+		t.Fatalf("disabled override contains AWS plumbing: %#v", disabled)
+	}
+
+	config, _ := Bind("/config", "/run/wisp/config.toml", true)
+	enabled, err := NewRunOverride([]string{"opencode"}, []Mount{config}, []Mount{project})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sandbox := enabled.Services["sandbox"]
+	if _, ok := enabled.Services["credentials"]; !ok || sandbox.NetworkMode != "service:credentials" || sandbox.Environment["AWS_CONTAINER_CREDENTIALS_FULL_URI"] == "" || sandbox.DependsOn["credentials"].Condition != "service_healthy" {
+		t.Fatalf("enabled override lacks AWS plumbing: %#v", enabled)
+	}
+}
+
 func TestCreateInvocationUsesFinalSnapshotPath(t *testing.T) {
 	root := t.TempDir()
 	files, err := CreateInvocationFiles(root, []byte("validated"), func(configPath string) (Override, error) {
-		mounts, mountErr := CredentialsMounts(configPath, "/host/aws/config", "/host/aws/sso/cache")
+		mounts, mountErr := CredentialsMounts(configPath, "/host/aws/config", "", "/host/aws/sso/cache")
 		if mountErr != nil {
 			return Override{}, mountErr
 		}

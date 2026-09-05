@@ -25,6 +25,9 @@ func (a *App) awsCheck(ctx context.Context, request cli.AWSCheckRequest) (status
 	if err != nil {
 		return 1, err
 	}
+	if !loaded.Config.AWS.Enabled {
+		return 1, errors.New("AWS support is not enabled in the configuration")
+	}
 	alias, err := config.SelectAWSAlias(loaded.Config, request.Alias)
 	if err != nil {
 		return 1, err
@@ -53,7 +56,7 @@ func (a *App) awsCheck(ctx context.Context, request cli.AWSCheckRequest) (status
 	}
 	planned := plannedEnvironment(a.planOptions(), loaded.Config, alias, hash)
 	files, err := docker.CreateInvocationFiles(runtimeRoot, loaded.Snapshot, func(snapshot string) (docker.Override, error) {
-		mounts, err := docker.CredentialsMounts(snapshot, loaded.Config.AWS.HostConfigPath, loaded.Config.AWS.SSOCachePath)
+		mounts, err := docker.CredentialsMounts(snapshot, loaded.Config.AWS.HostConfigPath, loaded.Config.AWS.HostCredentialsPath, loaded.Config.AWS.SSOCachePath)
 		if err != nil {
 			return docker.Override{}, err
 		}
@@ -111,8 +114,7 @@ func (a *App) awsCheck(ctx context.Context, request cli.AWSCheckRequest) (status
 		stdout, stderr, _ := a.docker.ComposeCapture(logCtx, invocation, "logs", "--no-color", "--tail", "100", "credentials")
 		cancel()
 		_, _ = fmt.Fprint(a.deps.Stderr, a.redactText(string(append(stdout, stderr...)), planned))
-		profile := loaded.Config.AWS.Aliases[alias].Profile
-		return 1, a.redact(fmt.Errorf("AWS credential check failed: %w; run aws sso login --profile %s", err, profile), planned)
+		return 1, a.redact(fmt.Errorf("AWS credential check failed: %w; verify the configured or default AWS credential source", err), planned)
 	}
 	fmt.Fprintf(a.deps.Stdout, "AWS credential check succeeded for alias %s\n", alias)
 	return 0, nil

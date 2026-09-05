@@ -82,6 +82,7 @@ func Resolve(raw RawConfig) (Config, error) {
 	}
 
 	if raw.AWS != nil {
+		cfg.AWS.Enabled = true
 		if raw.AWS.Default != nil {
 			cfg.AWS.Default = *raw.AWS.Default
 			if cfg.AWS.Default == "" {
@@ -102,6 +103,13 @@ func Resolve(raw RawConfig) (Config, error) {
 				return Config{}, errors.New("aws.sso_cache_path must not be empty when set")
 			}
 		}
+		if raw.AWS.HostCredentialsPath != nil {
+			cfg.AWS.HostCredentialsPath = *raw.AWS.HostCredentialsPath
+			cfg.AWS.HostCredentialsPathExplicit = true
+			if cfg.AWS.HostCredentialsPath == "" {
+				return Config{}, errors.New("aws.host_credentials_path must not be empty when set")
+			}
+		}
 		aliasNames := sortedRawAliasNames(raw.AWS.Aliases)
 		for _, name := range aliasNames {
 			alias, err := resolveAlias(name, raw.AWS.Aliases[name])
@@ -111,7 +119,7 @@ func Resolve(raw RawConfig) (Config, error) {
 			cfg.AWS.Aliases[name] = alias
 		}
 	}
-	if len(cfg.AWS.Aliases) == 0 {
+	if cfg.AWS.Enabled && len(cfg.AWS.Aliases) == 0 {
 		return Config{}, errors.New("aws.aliases must contain at least one alias")
 	}
 	if cfg.AWS.Default != "" {
@@ -138,16 +146,18 @@ func resolveAlias(name string, raw RawAWSAliasConfig) (AWSAliasConfig, error) {
 	if !aliasNamePattern.MatchString(name) {
 		return AWSAliasConfig{}, fmt.Errorf("aws alias name %q must match %s", name, aliasNamePattern)
 	}
-	if raw.Profile == nil || strings.TrimSpace(*raw.Profile) == "" {
-		return AWSAliasConfig{}, fmt.Errorf("aws.aliases.%s.profile is required and must not be empty", name)
-	}
 	if raw.RoleARN == nil || !strings.HasPrefix(*raw.RoleARN, "arn:") {
 		return AWSAliasConfig{}, fmt.Errorf("aws.aliases.%s.role_arn is required and must begin with %q", name, "arn:")
 	}
 	alias := AWSAliasConfig{
-		Profile:         *raw.Profile,
 		RoleARN:         *raw.RoleARN,
 		DurationSeconds: DefaultAWSDuration,
+	}
+	if raw.Profile != nil {
+		alias.Profile = *raw.Profile
+		if strings.TrimSpace(alias.Profile) == "" {
+			return AWSAliasConfig{}, fmt.Errorf("aws.aliases.%s.profile must not be empty when set", name)
+		}
 	}
 	if raw.DurationSeconds != nil {
 		alias.DurationSeconds = *raw.DurationSeconds
@@ -212,6 +222,12 @@ func validateMountTargets(mounts []MountConfig) error {
 // SelectAWSAlias applies requested, configured-default, then sole-alias
 // precedence. It never relies on map iteration order.
 func SelectAWSAlias(cfg Config, requested string) (string, error) {
+	if !cfg.AWS.Enabled {
+		if requested != "" {
+			return "", errors.New("AWS support is not enabled in the configuration")
+		}
+		return "", nil
+	}
 	if requested != "" {
 		if _, ok := cfg.AWS.Aliases[requested]; !ok {
 			return "", fmt.Errorf("AWS alias %q is not configured", requested)
@@ -245,41 +261,21 @@ func ValidateHostPaths(cfg *Config, configPath string, env Environment) ([]Warni
 		cfg.Mounts[i].Source = physical
 	}
 
-	if cfg.AWS.HostConfigPath == "" {
-		if err := requireAbsoluteHome(env.Home); err != nil {
-			return nil, fmt.Errorf("resolve default AWS config path: %w", err)
-		}
-		cfg.AWS.HostConfigPath = filepath.Join(env.Home, ".aws", "config")
-	} else {
-		resolved, err := resolveTOMLPath(cfg.AWS.HostConfigPath, configDir, env.Home)
+	if cfg.AWS.Enabled {
+		var err error
+		cfg.AWS.HostConfigPath, err = resolveOptionalAWSPath(cfg.AWS.HostConfigPath, cfg.AWS.HostConfigPathExplicit, filepath.Join(".aws", "config"), pathRegularFile, configDir, env.Home, "aws.host_config_path")
 		if err != nil {
-			return nil, fmt.Errorf("aws.host_config_path: %w", err)
+			return nil, err
 		}
-		cfg.AWS.HostConfigPath = resolved
-	}
-	physical, err := requirePath(cfg.AWS.HostConfigPath, pathRegularFile)
-	if err != nil {
-		return nil, fmt.Errorf("AWS config path %q: %w; configure aws.host_config_path and run aws sso login --profile PROFILE", cfg.AWS.HostConfigPath, err)
-	}
-	cfg.AWS.HostConfigPath = physical
-
-	if cfg.AWS.SSOCachePath == "" {
-		if err := requireAbsoluteHome(env.Home); err != nil {
-			return nil, fmt.Errorf("resolve default AWS SSO cache path: %w", err)
-		}
-		cfg.AWS.SSOCachePath = filepath.Join(env.Home, ".aws", "sso", "cache")
-	} else {
-		resolved, err := resolveTOMLPath(cfg.AWS.SSOCachePath, configDir, env.Home)
+		cfg.AWS.HostCredentialsPath, err = resolveOptionalAWSPath(cfg.AWS.HostCredentialsPath, cfg.AWS.HostCredentialsPathExplicit, filepath.Join(".aws", "credentials"), pathRegularFile, configDir, env.Home, "aws.host_credentials_path")
 		if err != nil {
-			return nil, fmt.Errorf("aws.sso_cache_path: %w", err)
+			return nil, err
 		}
-		cfg.AWS.SSOCachePath = resolved
+		cfg.AWS.SSOCachePath, err = resolveOptionalAWSPath(cfg.AWS.SSOCachePath, cfg.AWS.SSOCachePathExplicit, filepath.Join(".aws", "sso", "cache"), pathDirectory, configDir, env.Home, "aws.sso_cache_path")
+		if err != nil {
+			return nil, err
+		}
 	}
-	physical, err = requirePath(cfg.AWS.SSOCachePath, pathDirectory)
-	if err != nil {
-		return nil, fmt.Errorf("AWS SSO cache path %q: %w; configure aws.sso_cache_path and run aws sso login --profile PROFILE", cfg.AWS.SSOCachePath, err)
-	}
-	cfg.AWS.SSOCachePath = physical
 
 	warnings := make([]Warning, 0, 2)
 	if cfg.OpenCode.ConfigPathExplicit {
@@ -323,7 +319,7 @@ func ValidateHostPaths(cfg *Config, configPath string, env Environment) ([]Warni
 		return warnings, nil
 	}
 	authPath := filepath.Join(dataBase, "opencode", "auth.json")
-	physical, err = requirePath(authPath, pathRegularFile)
+	physical, err := requirePath(authPath, pathRegularFile)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			warnings = append(warnings, Warning(fmt.Sprintf("OpenCode auth file %q does not exist; authenticate on the host to persist login", authPath)))
@@ -335,8 +331,8 @@ func ValidateHostPaths(cfg *Config, configPath string, env Environment) ([]Warni
 	return warnings, nil
 }
 
-// HostPathDiagnostic describes one independently checked host path. A warning
-// is used only for optional default OpenCode paths; required paths use Err.
+// HostPathDiagnostic describes one independently checked host path. Optional
+// default paths use Warning; explicitly configured or required paths use Err.
 type HostPathDiagnostic struct {
 	Path    string
 	Warning Warning
@@ -348,6 +344,7 @@ type HostPathDiagnostic struct {
 type HostPathDiagnostics struct {
 	Mounts         []HostPathDiagnostic
 	AWSConfig      HostPathDiagnostic
+	AWSCredentials HostPathDiagnostic
 	AWSSSOCache    HostPathDiagnostic
 	OpenCodeConfig HostPathDiagnostic
 	OpenCodeAuth   HostPathDiagnostic
@@ -367,34 +364,10 @@ func DiagnoseHostPaths(cfg Config, configPath string, env Environment) HostPathD
 		result.Mounts[i].Err = err
 	}
 
-	awsConfig := cfg.AWS.HostConfigPath
-	if awsConfig == "" {
-		if err := requireAbsoluteHome(env.Home); err != nil {
-			result.AWSConfig.Err = fmt.Errorf("resolve default AWS config path: %w", err)
-		} else {
-			awsConfig = filepath.Join(env.Home, ".aws", "config")
-		}
-	} else {
-		awsConfig, result.AWSConfig.Err = resolveTOMLPath(awsConfig, configDir, env.Home)
-	}
-	if result.AWSConfig.Err == nil {
-		result.AWSConfig.Path = awsConfig
-		result.AWSConfig.Path, result.AWSConfig.Err = requirePath(awsConfig, pathRegularFile)
-	}
-
-	awsCache := cfg.AWS.SSOCachePath
-	if awsCache == "" {
-		if err := requireAbsoluteHome(env.Home); err != nil {
-			result.AWSSSOCache.Err = fmt.Errorf("resolve default AWS SSO cache path: %w", err)
-		} else {
-			awsCache = filepath.Join(env.Home, ".aws", "sso", "cache")
-		}
-	} else {
-		awsCache, result.AWSSSOCache.Err = resolveTOMLPath(awsCache, configDir, env.Home)
-	}
-	if result.AWSSSOCache.Err == nil {
-		result.AWSSSOCache.Path = awsCache
-		result.AWSSSOCache.Path, result.AWSSSOCache.Err = requirePath(awsCache, pathDirectory)
+	if cfg.AWS.Enabled {
+		result.AWSConfig = diagnoseOptionalAWSPath(cfg.AWS.HostConfigPath, cfg.AWS.HostConfigPathExplicit, filepath.Join(".aws", "config"), pathRegularFile, configDir, env.Home, "AWS config")
+		result.AWSCredentials = diagnoseOptionalAWSPath(cfg.AWS.HostCredentialsPath, cfg.AWS.HostCredentialsPathExplicit, filepath.Join(".aws", "credentials"), pathRegularFile, configDir, env.Home, "AWS credentials")
+		result.AWSSSOCache = diagnoseOptionalAWSPath(cfg.AWS.SSOCachePath, cfg.AWS.SSOCachePathExplicit, filepath.Join(".aws", "sso", "cache"), pathDirectory, configDir, env.Home, "AWS SSO cache")
 	}
 
 	if cfg.OpenCode.ConfigPathExplicit {
@@ -432,6 +405,59 @@ func DiagnoseHostPaths(cfg Config, configPath string, env Environment) HostPathD
 		} else {
 			result.OpenCodeAuth.Path = physical
 		}
+	}
+	return result
+}
+
+func resolveOptionalAWSPath(configured string, explicit bool, defaultRelative string, kind requiredPathType, configDir, home, field string) (string, error) {
+	candidate := configured
+	if candidate == "" {
+		if err := requireAbsoluteHome(home); err != nil {
+			if explicit {
+				return "", fmt.Errorf("%s: %w", field, err)
+			}
+			return "", nil
+		}
+		candidate = filepath.Join(home, defaultRelative)
+	} else {
+		resolved, err := resolveTOMLPath(candidate, configDir, home)
+		if err != nil {
+			return "", fmt.Errorf("%s: %w", field, err)
+		}
+		candidate = resolved
+	}
+	physical, err := requirePath(candidate, kind)
+	if err != nil {
+		if !explicit && errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", fmt.Errorf("%s %q: %w", field, candidate, err)
+	}
+	return physical, nil
+}
+
+func diagnoseOptionalAWSPath(configured string, explicit bool, defaultRelative string, kind requiredPathType, configDir, home, name string) HostPathDiagnostic {
+	var result HostPathDiagnostic
+	candidate := configured
+	var err error
+	if candidate == "" {
+		if err = requireAbsoluteHome(home); err == nil {
+			candidate = filepath.Join(home, defaultRelative)
+		}
+	} else {
+		candidate, err = resolveTOMLPath(candidate, configDir, home)
+	}
+	result.Path = candidate
+	if err == nil {
+		result.Path, err = requirePath(candidate, kind)
+	}
+	if err == nil {
+		return result
+	}
+	if explicit {
+		result.Err = err
+	} else {
+		result.Warning = Warning(fmt.Sprintf("default %s path %q is unavailable (%v); another credential source may be used", name, candidate, err))
 	}
 	return result
 }

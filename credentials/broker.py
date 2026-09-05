@@ -28,7 +28,7 @@ REFRESH_MARGIN = timedelta(minutes=5)
 @dataclass(frozen=True)
 class RoleConfig:
     alias: str
-    profile: str
+    profile: str | None
     role_arn: str
     region: str | None
     duration_seconds: int
@@ -38,6 +38,8 @@ class RoleConfig:
 def initialize_sso_cache(source_path: str) -> None:
     """Copy host SSO tokens into per-run tmpfs so botocore can refresh them."""
     source = Path(source_path)
+    if not source.is_dir():
+        return
     destination = Path.home() / ".aws" / "sso" / "cache"
     destination.mkdir(parents=True, exist_ok=True)
     for token_file in source.iterdir():
@@ -130,8 +132,8 @@ def load_role_config(path: str, requested_alias: str | None) -> RoleConfig:
     region = entry.get("region")
     duration = entry.get("duration_seconds", 3600)
     eks_cluster = entry.get("eks_cluster")
-    if not isinstance(profile, str) or not profile:
-        raise ValueError(f"AWS alias {alias!r} requires a profile")
+    if profile is not None and (not isinstance(profile, str) or not profile):
+        raise ValueError(f"AWS alias {alias!r} has an invalid profile")
     if not isinstance(role_arn, str) or not role_arn.startswith("arn:"):
         raise ValueError(f"AWS alias {alias!r} requires a role_arn")
     if region is not None and (not isinstance(region, str) or not region):
@@ -165,7 +167,12 @@ class CredentialCache:
     def _new_sts_client(config: RoleConfig) -> Any:
         import boto3
 
-        session = boto3.Session(profile_name=config.profile, region_name=config.region)
+        session_options: dict[str, str] = {}
+        if config.profile is not None:
+            session_options["profile_name"] = config.profile
+        if config.region is not None:
+            session_options["region_name"] = config.region
+        session = boto3.Session(**session_options)
         return session.client("sts")
 
     def get(self) -> dict[str, str]:
@@ -288,7 +295,7 @@ def main() -> None:
         os.environ.get("WISP_AWS_ALIAS") or None,
     )
     cache = CredentialCache(config)
-    cache.get()  # Fail startup early when SSO is missing, expired, or unauthorized.
+    cache.get()  # Fail startup early when source credentials or role access are unavailable.
 
     server = CredentialServer(("127.0.0.1", 9911), token, cache, config)
     LOG.info("serving credentials for AWS alias %s on 127.0.0.1:9911", config.alias)

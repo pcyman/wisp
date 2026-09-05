@@ -2,15 +2,15 @@
 
 Wisp runs [OpenCode](https://opencode.ai/) in a small Docker sandbox for the
 current project. The project is mounted read-write, while the container home is
-ephemeral. AWS access is supplied through a separate credential broker using a
-configured AWS SSO profile and role.
+ephemeral. AWS access is opt-in and, when configured, is supplied through a
+separate credential broker that assumes a configured role.
 
 ## Requirements
 
 - Linux or macOS
 - A local Docker daemon or Docker Desktop
 - Docker 20.10+, Compose 2.24+, and Buildx 0.11+ for image builds
-- AWS CLI with an SSO profile
+- AWS CLI when the optional AWS source-credential workflow requires it (for example, SSO login)
 - Go 1.23+ when building from source
 
 Remote Docker daemons and Windows are not supported.
@@ -20,12 +20,12 @@ Remote Docker daemons and Windows are not supported.
 Build from source and place the resulting binary on your `PATH`:
 
 ```sh
-go build -trimpath -o wisp ./cmd/wisp
+go build -trimpath -o ~/.local/bin/wisp ./cmd/wisp
 ```
 
 ## Get started
 
-Create the config, uncomment and edit the generated AWS alias, then validate it:
+Create and validate the config:
 
 ```sh
 wisp config init
@@ -33,7 +33,29 @@ ${EDITOR:-vi} "$(wisp config path)"
 wisp config validate
 ```
 
-Authenticate the configured profile and verify broker access:
+AWS and the EKS kubeconfig integration are disabled unless the config contains
+an `[aws]` table with at least one alias. To enable them, configure a role:
+
+```toml
+[aws]
+default = "development"
+
+[aws.aliases.development]
+role_arn = "arn:aws:iam::123456789012:role/Wisp"
+# profile = "company-development" # optional
+region = "eu-west-1"
+# eks_cluster = "development-cluster"
+```
+
+When `profile` is set, Wisp uses that profile as the source identity for
+`AssumeRole`. When it is omitted, boto3 uses its default credential chain.
+Wisp makes available host environment credentials and any existing default
+`~/.aws/config`, `~/.aws/credentials`, and `~/.aws/sso/cache` inputs to the
+broker only. Their paths can be overridden with `host_config_path`,
+`host_credentials_path`, and `sso_cache_path`; default paths that do not exist
+are simply ignored.
+
+For an SSO-backed profile, authenticate first, then verify broker access:
 
 ```sh
 aws sso login --profile company-development

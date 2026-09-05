@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import dataclasses
 import http.client
 import json
 import stat
+import sys
 import tempfile
 import threading
 import unittest
@@ -151,8 +153,9 @@ class RoleConfigTests(unittest.TestCase):
                 self.load(self.document(default=selected_default))
 
     def test_profile_validation(self) -> None:
-        for value in (None, "", 1, True):
-            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "requires a profile"):
+        self.assertIsNone(self.load(self.document(profile=None)).profile)
+        for value in ("", 1, True):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "invalid profile"):
                 self.load(self.document(profile=value))
 
     def test_role_arn_validation(self) -> None:
@@ -195,6 +198,13 @@ class RoleConfigTests(unittest.TestCase):
 
 
 class SSOInitializationTests(unittest.TestCase):
+    def test_missing_source_is_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            with mock.patch.object(broker.Path, "home", return_value=home):
+                broker.initialize_sso_cache(str(Path(directory) / "missing"))
+            self.assertFalse((home / ".aws" / "sso" / "cache").exists())
+
     def test_copies_only_regular_json_files_with_private_mode(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -268,6 +278,19 @@ class CredentialCacheTests(unittest.TestCase):
                 "Expiration": "2026-01-02T04:04:05Z",
             },
         )
+
+    def test_default_session_chain_is_used_without_profile(self) -> None:
+        config = dataclasses.replace(self.config, profile=None, region=None)
+        session = mock.Mock()
+        with mock.patch.dict(sys.modules, {"boto3": mock.Mock(Session=session)}):
+            broker.CredentialCache._new_sts_client(config)
+        session.assert_called_once_with()
+
+    def test_configured_profile_and_region_are_passed_to_session(self) -> None:
+        session = mock.Mock()
+        with mock.patch.dict(sys.modules, {"boto3": mock.Mock(Session=session)}):
+            broker.CredentialCache._new_sts_client(self.config)
+        session.assert_called_once_with(profile_name=self.config.profile, region_name=self.config.region)
 
     def test_string_expiration_is_preserved_in_response(self) -> None:
         cache = broker.CredentialCache(self.config, self.factory, lambda: NOW)

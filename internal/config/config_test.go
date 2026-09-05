@@ -111,6 +111,39 @@ func TestResolveRejectsInvalidValues(t *testing.T) {
 	}
 }
 
+func TestResolveAllowsAWSOptOutAndOptionalProfile(t *testing.T) {
+	t.Parallel()
+	raw, err := Decode([]byte("schema_version = 1\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Resolve(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AWS.Enabled {
+		t.Fatal("AWS was enabled without an [aws] table")
+	}
+	if alias, err := SelectAWSAlias(cfg, ""); err != nil || alias != "" {
+		t.Fatalf("disabled AWS selection = %q, %v", alias, err)
+	}
+	if _, err := SelectAWSAlias(cfg, "dev"); err == nil {
+		t.Fatal("--aws was accepted while AWS is disabled")
+	}
+
+	raw, err = Decode([]byte("schema_version = 1\n[aws.aliases.dev]\nrole_arn = \"arn:role\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = Resolve(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.AWS.Enabled || cfg.AWS.Aliases["dev"].Profile != "" {
+		t.Fatalf("optional profile config = %#v", cfg.AWS)
+	}
+}
+
 func TestDurationBoundaries(t *testing.T) {
 	t.Parallel()
 	for _, duration := range []int{900, 43200} {
@@ -130,7 +163,7 @@ func TestDurationBoundaries(t *testing.T) {
 
 func TestSelectAWSAlias(t *testing.T) {
 	t.Parallel()
-	cfg := Config{AWS: AWSConfig{Default: "default", Aliases: map[string]AWSAliasConfig{"default": {}, "other": {}}}}
+	cfg := Config{AWS: AWSConfig{Enabled: true, Default: "default", Aliases: map[string]AWSAliasConfig{"default": {}, "other": {}}}}
 	if got, err := SelectAWSAlias(cfg, "other"); err != nil || got != "other" {
 		t.Fatalf("requested selection = %q, %v", got, err)
 	}

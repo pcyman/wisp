@@ -27,8 +27,15 @@ type Override struct {
 }
 
 type OverrideService struct {
-	Command []string `json:"command,omitempty"`
-	Volumes []Mount  `json:"volumes,omitempty"`
+	Command     []string              `json:"command,omitempty"`
+	Volumes     []Mount               `json:"volumes,omitempty"`
+	Environment map[string]string     `json:"environment,omitempty"`
+	DependsOn   map[string]Dependency `json:"depends_on,omitempty"`
+	NetworkMode string                `json:"network_mode,omitempty"`
+}
+
+type Dependency struct {
+	Condition string `json:"condition"`
 }
 
 // Bind creates the only mount representation emitted by this package.
@@ -53,10 +60,22 @@ func NewRunOverride(command []string, credentialMounts, sandboxMounts []Mount) (
 	if err := validateMounts(sandboxMounts); err != nil {
 		return Override{}, fmt.Errorf("sandbox mounts: %w", err)
 	}
-	return Override{Services: map[string]OverrideService{
-		"credentials": {Volumes: append([]Mount(nil), credentialMounts...)},
-		"sandbox":     {Command: append([]string(nil), command...), Volumes: append([]Mount(nil), sandboxMounts...)},
-	}}, nil
+	services := map[string]OverrideService{
+		"sandbox": {Command: append([]string(nil), command...), Volumes: append([]Mount(nil), sandboxMounts...)},
+	}
+	if len(credentialMounts) > 0 {
+		services["credentials"] = OverrideService{Volumes: append([]Mount(nil), credentialMounts...)}
+		sandbox := services["sandbox"]
+		sandbox.Environment = map[string]string{
+			"AWS_CONTAINER_AUTHORIZATION_TOKEN":  "${WISP_AWS_AUTHORIZATION_TOKEN:?authorization token is required}",
+			"AWS_CONTAINER_CREDENTIALS_FULL_URI": "http://127.0.0.1:9911/credentials",
+			"AWS_EC2_METADATA_DISABLED":          "true",
+		}
+		sandbox.DependsOn = map[string]Dependency{"credentials": {Condition: "service_healthy"}}
+		sandbox.NetworkMode = "service:credentials"
+		services["sandbox"] = sandbox
+	}
+	return Override{Services: services}, nil
 }
 
 // NewCredentialsOverride creates an aws-check override without sandbox data.
@@ -75,17 +94,21 @@ type InvocationFiles struct {
 }
 
 // CredentialsMounts constructs the fixed broker trust-boundary mounts.
-func CredentialsMounts(configSnapshot, awsConfig, ssoCache string) ([]Mount, error) {
+func CredentialsMounts(configSnapshot, awsConfig, awsCredentials, ssoCache string) ([]Mount, error) {
 	specs := []struct {
 		source string
 		target string
 	}{
 		{configSnapshot, "/run/wisp/config.toml"},
 		{awsConfig, "/home/broker/.aws/config"},
+		{awsCredentials, "/home/broker/.aws/credentials"},
 		{ssoCache, "/run/aws/sso-cache"},
 	}
 	mounts := make([]Mount, 0, len(specs))
 	for _, spec := range specs {
+		if spec.source == "" {
+			continue
+		}
 		mount, err := Bind(spec.source, spec.target, true)
 		if err != nil {
 			return nil, err

@@ -43,10 +43,17 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 	if err != nil {
 		return 1, err
 	}
-	files, err := docker.CreateInvocationFiles(runtimeRoot, plan.ConfigSnapshot, func(snapshot string) (docker.Override, error) {
-		credentials, err := docker.CredentialsMounts(snapshot, plan.AWSConfigPath, plan.AWSSSOCachePath)
-		if err != nil {
-			return docker.Override{}, err
+	var brokerConfigSnapshot []byte
+	if plan.AWSEnabled {
+		brokerConfigSnapshot = plan.ConfigSnapshot
+	}
+	files, err := docker.CreateInvocationFiles(runtimeRoot, brokerConfigSnapshot, func(snapshot string) (docker.Override, error) {
+		var credentials []docker.Mount
+		if plan.AWSEnabled {
+			credentials, err = docker.CredentialsMounts(snapshot, plan.AWSConfigPath, plan.AWSCredentialsPath, plan.AWSSSOCachePath)
+			if err != nil {
+				return docker.Override{}, err
+			}
 		}
 		return docker.NewRunOverride(plan.Command, credentials, plan.Mounts)
 	})
@@ -66,23 +73,30 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 		return 1, err
 	}
 	if stale {
-		// Compose parses required interpolation variables even for `down`. Use a
-		// non-secret value solely to remove already-validated stale resources;
-		// generate the actual per-run broker token only after cleanup succeeds.
 		cleanupEnvironment := cloneEnvironment(plan.Environment)
-		cleanupEnvironment["WISP_AWS_AUTHORIZATION_TOKEN"] = cleanupAuthorizationPlaceholder
+		if plan.AWSEnabled {
+			// The AWS-enabled override requires this interpolation even for `down`.
+			// Use a non-secret placeholder before generating the per-run token.
+			cleanupEnvironment["WISP_AWS_AUTHORIZATION_TOKEN"] = cleanupAuthorizationPlaceholder
+		}
 		invocation.Environment = a.childEnvironment(cleanupEnvironment)
 		if _, stderr, err := a.docker.ComposeCapture(ctx, invocation, "down", "--remove-orphans"); err != nil {
 			return 1, fmt.Errorf("clean stale Compose resources: %s: %w", string(stderr), err)
 		}
 	}
-	if err := a.addAuthorizationToken(plan.Environment); err != nil {
-		return 1, err
+	if plan.AWSEnabled {
+		if err := a.addAuthorizationToken(plan.Environment); err != nil {
+			return 1, err
+		}
 	}
 	invocation.Environment = a.childEnvironment(plan.Environment)
+	images := []docker.Image{{Service: "sandbox", Name: plan.Images.Sandbox}}
+	if plan.AWSEnabled {
+		images = append(images, docker.Image{Service: "credentials", Name: plan.Images.Credentials})
+	}
 	if _, err := a.docker.EnsureImages(ctx, docker.BuildRequest{
 		Invocation: invocation, LockRoot: runtimeRoot, UID: plan.UID, CPUs: plan.BuildCPUs, Rebuild: plan.Rebuild,
-		Images: []docker.Image{{Service: "sandbox", Name: plan.Images.Sandbox}, {Service: "credentials", Name: plan.Images.Credentials}},
+		Images: images,
 	}); err != nil {
 		return 1, a.redact(err, plan.Environment)
 	}
@@ -98,20 +112,22 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 		status, resultErr = cleanupResult(status, resultErr, a.redact(cleanupErr, plan.Environment), a.deps.Stderr)
 	}()
 
-	fmt.Fprintln(a.deps.Stderr, "Starting AWS credential broker...")
-	composeStarted = true
-	if _, _, err := a.docker.ComposeCapture(ctx, invocation, "up", "--detach", "--wait", "credentials"); err != nil {
-		logCtx, cancel := context.WithTimeout(context.Background(), a.deps.CleanupTimeout)
-		logs, logErrors, _ := a.docker.ComposeCapture(logCtx, invocation, "logs", "--no-color", "--tail", "100", "credentials")
-		cancel()
-		if len(logs)+len(logErrors) > 0 {
-			_, _ = fmt.Fprint(a.deps.Stderr, a.redactText(string(append(logs, logErrors...)), plan.Environment))
+	if plan.AWSEnabled {
+		fmt.Fprintln(a.deps.Stderr, "Starting AWS credential broker...")
+		composeStarted = true
+		if _, _, err := a.docker.ComposeCapture(ctx, invocation, "up", "--detach", "--wait", "credentials"); err != nil {
+			logCtx, cancel := context.WithTimeout(context.Background(), a.deps.CleanupTimeout)
+			logs, logErrors, _ := a.docker.ComposeCapture(logCtx, invocation, "logs", "--no-color", "--tail", "100", "credentials")
+			cancel()
+			if len(logs)+len(logErrors) > 0 {
+				_, _ = fmt.Fprint(a.deps.Stderr, a.redactText(string(append(logs, logErrors...)), plan.Environment))
+			}
+			return 1, a.redact(fmt.Errorf("start AWS credential broker: %w; verify the configured or default AWS credential source", err), plan.Environment)
 		}
-		profile := plan.AWSProfile
-		return 1, a.redact(fmt.Errorf("start AWS credential broker: %w; run aws sso login --profile %s", err, profile), plan.Environment)
 	}
 
 	fmt.Fprintln(a.deps.Stderr, "Starting OpenCode...")
+	composeStarted = true
 	args := []string{"run", "--rm", "--name", plan.Project.ContainerName, "--user", fmt.Sprintf("%d:%d", plan.UID, plan.GID), "--workdir", plan.Project.Workdir(), "--no-deps"}
 	if !a.deps.IsTerminal(a.deps.Stdin, a.deps.Stdout) {
 		args = append(args, "--no-TTY")

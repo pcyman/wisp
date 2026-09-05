@@ -6,13 +6,22 @@ services:
       args:
         BOTO3_VERSION: ${BOTO3_VERSION:-1.35.99}
     environment:
-      WISP_AWS_ALIAS: "${WISP_AWS_ALIAS:?AWS alias is required}"
-      WISP_AWS_AUTHORIZATION_TOKEN: "${WISP_AWS_AUTHORIZATION_TOKEN:?authorization token is required}"
-      WISP_CONFIG: /run/wisp/config.toml
-      WISP_AWS_SSO_CACHE_SOURCE: /run/aws/sso-cache
-      AWS_CONFIG_FILE: /home/broker/.aws/config
-      AWS_SDK_LOAD_CONFIG: "1"
-      HOME: /home/broker
+      - WISP_AWS_ALIAS=${WISP_AWS_ALIAS:-}
+      - WISP_AWS_AUTHORIZATION_TOKEN=${WISP_AWS_AUTHORIZATION_TOKEN:-}
+      - WISP_CONFIG=/run/wisp/config.toml
+      - WISP_AWS_SSO_CACHE_SOURCE=/run/aws/sso-cache
+      - AWS_CONFIG_FILE=/home/broker/.aws/config
+      - AWS_SDK_LOAD_CONFIG=1
+      - HOME=/home/broker
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - AWS_SESSION_TOKEN
+      - AWS_SECURITY_TOKEN
+      - AWS_PROFILE
+      - AWS_DEFAULT_PROFILE
+      - AWS_REGION
+      - AWS_DEFAULT_REGION
+      - AWS_EC2_METADATA_DISABLED
     labels:
       wisp.managed: "true"
       wisp.kind: credentials
@@ -49,9 +58,6 @@ services:
         TERRAFORM_VERSION: ${TERRAFORM_VERSION:-}
         GO_VERSION: ${GO_VERSION:-}
     environment:
-      AWS_CONTAINER_AUTHORIZATION_TOKEN: "${WISP_AWS_AUTHORIZATION_TOKEN:?authorization token is required}"
-      AWS_CONTAINER_CREDENTIALS_FULL_URI: http://127.0.0.1:9911/credentials
-      AWS_EC2_METADATA_DISABLED: "true"
       HOME: /home/sandbox
       KUBECONFIG: /home/sandbox/.kube/config
       TERM: ${TERM:-}
@@ -62,10 +68,6 @@ services:
       wisp.owner-uid: "${WISP_UID:-1000}"
       wisp.project-hash: "${WISP_PROJECT_HASH:-unknown}"
       wisp.version: "${WISP_CLI_VERSION:-development}"
-    depends_on:
-      credentials:
-        condition: service_healthy
-    network_mode: service:credentials
     init: true
     tmpfs:
       - /home/sandbox:uid=${WISP_UID:-1000},gid=${WISP_GID:-1000},mode=0700

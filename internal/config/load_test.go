@@ -79,6 +79,47 @@ func TestLoadExplicitOpenCodePathMustExist(t *testing.T) {
 	}
 }
 
+func TestLoadWithoutAWSDoesNotRequireAWSHostPaths(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.toml")
+	if err := os.WriteFile(configPath, []byte("schema_version = 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Load(configPath, Environment{Home: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Config.AWS.Enabled || result.Config.AWS.HostConfigPath != "" || result.Config.AWS.SSOCachePath != "" {
+		t.Fatalf("AWS config = %#v", result.Config.AWS)
+	}
+}
+
+func TestLoadAWSUsesOnlyAvailableDefaultInputs(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	awsDir := filepath.Join(root, ".aws")
+	if err := os.MkdirAll(awsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	credentials := filepath.Join(awsDir, "credentials")
+	if err := os.WriteFile(credentials, []byte("[default]\naws_access_key_id = test\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(root, "config.toml")
+	contents := "schema_version = 1\n[aws.aliases.dev]\nrole_arn = \"arn:role\"\n"
+	if err := os.WriteFile(configPath, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Load(configPath, Environment{Home: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Config.AWS.HostConfigPath != "" || result.Config.AWS.SSOCachePath != "" || result.Config.AWS.HostCredentialsPath != credentials {
+		t.Fatalf("AWS paths = %#v", result.Config.AWS)
+	}
+}
+
 func TestLoadReturnsCanonicalConfigPath(t *testing.T) {
 	root := t.TempDir()
 	realDir := filepath.Join(root, "real")

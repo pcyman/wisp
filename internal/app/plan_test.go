@@ -236,6 +236,34 @@ role_arn = "arn:aws:iam::123456789012:role/Wisp"
 	}
 }
 
+func TestPlanRunWithoutAWSHasNoAWSInputs(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	projectDir := filepath.Join(root, "project")
+	if err := os.Mkdir(projectDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(root, "config.toml")
+	if err := os.WriteFile(configPath, []byte("schema_version = 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := PlanRun(context.Background(), runRequest(configPath, projectDir, ""), PlanOptions{
+		InvocationDir: root,
+		UID:           os.Getuid(),
+		GID:           os.Getgid(),
+		Environment:   HostEnvironment{Home: root, TempDir: root},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.AWSEnabled || plan.SelectedAWSAlias != "" || plan.AWSConfigPath != "" || plan.AWSCredentialsPath != "" || plan.AWSSSOCachePath != "" {
+		t.Fatalf("AWS plan = %#v", plan)
+	}
+	if _, ok := plan.Environment["WISP_AWS_ALIAS"]; ok {
+		t.Fatal("disabled plan contains WISP_AWS_ALIAS")
+	}
+}
+
 func TestPlanRunReportsConfigResolutionError(t *testing.T) {
 	root := t.TempDir()
 	_, err := PlanRun(context.Background(), runRequest(filepath.Join(root, "missing.toml"), root, ""), PlanOptions{

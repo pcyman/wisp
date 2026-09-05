@@ -97,18 +97,24 @@ func (a *App) doctor(ctx context.Context, override string) int {
 	}
 
 	if !configResolved {
-		for _, check := range []string{"AWS alias", "AWS config", "AWS SSO cache", "OpenCode config", "OpenCode auth", "mounts", "mount collisions"} {
+		for _, check := range []string{"AWS support", "OpenCode config", "OpenCode auth", "mounts", "mount collisions"} {
 			report.line("FAIL", check, "not available because config validation failed")
 		}
 	} else {
-		if alias, err := config.SelectAWSAlias(effective, ""); err != nil {
-			report.line("FAIL", "AWS alias", err.Error())
+		if !effective.AWS.Enabled {
+			report.line("PASS", "AWS support", "disabled")
 		} else {
-			report.line("PASS", "AWS alias", alias)
+			if alias, err := config.SelectAWSAlias(effective, ""); err != nil {
+				report.line("FAIL", "AWS alias", err.Error())
+			} else {
+				report.line("PASS", "AWS alias", alias)
+			}
+			paths := config.DiagnoseHostPaths(effective, configPath, configEnv)
+			reportHostPath(report, "AWS config", paths.AWSConfig, true)
+			reportHostPath(report, "AWS credentials", paths.AWSCredentials, true)
+			reportHostPath(report, "AWS SSO cache", paths.AWSSSOCache, true)
 		}
 		paths := config.DiagnoseHostPaths(effective, configPath, configEnv)
-		reportHostPath(report, "AWS config", paths.AWSConfig, false)
-		reportHostPath(report, "AWS SSO cache", paths.AWSSSOCache, false)
 		reportHostPath(report, "OpenCode config", paths.OpenCodeConfig, true)
 		reportHostPath(report, "OpenCode auth", paths.OpenCodeAuth, true)
 		if mountValidationErr == nil {
@@ -184,7 +190,11 @@ func (a *App) doctor(ctx context.Context, override string) int {
 		report.line("PASS", "Buildx", buildx)
 	}
 	if configResolved {
-		for _, image := range []struct{ service, name string }{{"sandbox", effective.Images.Sandbox}, {"credentials", effective.Images.Credentials}} {
+		images := []struct{ service, name string }{{"sandbox", effective.Images.Sandbox}}
+		if effective.AWS.Enabled {
+			images = append(images, struct{ service, name string }{"credentials", effective.Images.Credentials})
+		}
+		for _, image := range images {
 			if exists, err := a.docker.ImageExists(ctx, image.name); err != nil {
 				report.line("FAIL", image.service+" image", err.Error())
 			} else if !exists {
@@ -195,7 +205,6 @@ func (a *App) doctor(ctx context.Context, override string) int {
 		}
 	} else {
 		report.line("FAIL", "sandbox image", "not available because config validation failed")
-		report.line("FAIL", "credentials image", "not available because config validation failed")
 	}
 	if projectErr == nil {
 		a.doctorResources(ctx, report, resolvedProject)

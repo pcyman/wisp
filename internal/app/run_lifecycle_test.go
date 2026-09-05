@@ -23,6 +23,7 @@ type lifecycleFake struct {
 	staleCleaned  bool
 	staleDownEnv  []string
 	downCount     int
+	upCount       int
 	upError       func(process.Command) error
 	logOutput     func(process.Command) string
 	attachedError func(process.Command) error
@@ -58,6 +59,7 @@ func (f *lifecycleFake) runner(t *testing.T) *recordingRunner {
 		case len(command.Args) >= 2 && reflect.DeepEqual(command.Args[:2], []string{"image", "inspect"}):
 			return []byte("[]"), nil, nil
 		case indexSlice(command.Args, []string{"up", "--detach", "--wait", "credentials"}) >= 0:
+			f.upCount++
 			if f.upError != nil {
 				return nil, nil, f.upError(command)
 			}
@@ -89,6 +91,29 @@ func (f *lifecycleFake) runner(t *testing.T) *recordingRunner {
 		return nil
 	}
 	return runner
+}
+
+func TestRunWithoutAWSDoesNotStartBrokerOrGenerateToken(t *testing.T) {
+	root, configPath, projectDir := applicationFixture(t)
+	if err := os.WriteFile(configPath, []byte("schema_version = 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	fake := &lifecycleFake{}
+	application := newFixtureApp(t, root, fake.runner(t), &bytes.Buffer{}, &stderr)
+	randomReads := 0
+	application.deps.Random = observingReader{Reader: bytes.NewReader(make([]byte, 32)), observed: func() { randomReads++ }}
+	fake.attachedError = func(command process.Command) error {
+		if testEnvironmentValue(command.Env, "WISP_AWS_AUTHORIZATION_TOKEN") != "" || testEnvironmentValue(command.Env, "WISP_AWS_ALIAS") != "" {
+			return errors.New("AWS environment reached disabled run")
+		}
+		return nil
+	}
+
+	status := application.Execute(context.Background(), cli.Request{Command: cli.CommandRun, Run: cli.RunRequest{Directory: projectDir, ConfigPath: configPath}})
+	if status != 0 || fake.upCount != 0 || randomReads != 0 || strings.Contains(stderr.String(), "credential broker") {
+		t.Fatalf("status=%d broker starts=%d random reads=%d stderr=%q", status, fake.upCount, randomReads, stderr.String())
+	}
 }
 
 func TestStaleCleanupPrecedesTokenGenerationAndUsesPlaceholder(t *testing.T) {

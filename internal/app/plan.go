@@ -57,9 +57,10 @@ type SandboxPlan struct {
 	Project            project.Project
 	ConfigPath         string
 	ConfigSnapshot     []byte
+	AWSEnabled         bool
 	SelectedAWSAlias   string
-	AWSProfile         string
 	AWSConfigPath      string
+	AWSCredentialsPath string
 	AWSSSOCachePath    string
 	UID                int
 	GID                int
@@ -183,9 +184,10 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 		Project:            resolvedProject,
 		ConfigPath:         loaded.Path,
 		ConfigSnapshot:     append([]byte(nil), loaded.Snapshot...),
+		AWSEnabled:         loaded.Config.AWS.Enabled,
 		SelectedAWSAlias:   selectedAlias,
-		AWSProfile:         loaded.Config.AWS.Aliases[selectedAlias].Profile,
 		AWSConfigPath:      loaded.Config.AWS.HostConfigPath,
+		AWSCredentialsPath: loaded.Config.AWS.HostCredentialsPath,
 		AWSSSOCachePath:    loaded.Config.AWS.SSOCachePath,
 		UID:                options.UID,
 		GID:                options.GID,
@@ -209,7 +211,6 @@ func plannedEnvironment(options PlanOptions, cfg config.Config, alias, projectHa
 		"WISP_CREDENTIALS_IMAGE": cfg.Images.Credentials,
 		"WISP_UID":               strconv.Itoa(options.UID),
 		"WISP_GID":               strconv.Itoa(options.GID),
-		"WISP_AWS_ALIAS":         alias,
 		"WISP_PROJECT_HASH":      projectHash,
 		"WISP_CLI_VERSION":       options.CLIVersion,
 		"OPENCODE_VERSION":       versions.OpenCode,
@@ -220,6 +221,9 @@ func plannedEnvironment(options PlanOptions, cfg config.Config, alias, projectHa
 		"TERRAFORM_VERSION":      versions.Terraform,
 		"GO_VERSION":             versions.Go,
 		"BOTO3_VERSION":          versions.Boto3,
+	}
+	if cfg.AWS.Enabled {
+		environment["WISP_AWS_ALIAS"] = alias
 	}
 	if options.Environment.Term != "" {
 		environment["TERM"] = options.Environment.Term

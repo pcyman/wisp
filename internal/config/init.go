@@ -28,13 +28,15 @@ boto3 = "1.35.99"
 
 [opencode]
 
-[aws]
+# AWS is opt-in. Uncomment this table and at least one alias to enable it.
+# [aws]
 # default = "development"
 # host_config_path = "~/.aws/config"
+# host_credentials_path = "~/.aws/credentials"
 # sso_cache_path = "~/.aws/sso/cache"
 
 # [aws.aliases.development]
-# profile = "company-development"
+# profile = "company-development" # optional; omit to use the default credential chain
 # role_arn = "arn:aws:iam::123456789012:role/Wisp"
 # region = "eu-west-1"
 # duration_seconds = 3600
