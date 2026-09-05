@@ -2,8 +2,9 @@
 
 Wisp runs [OpenCode](https://opencode.ai/) in a small Docker sandbox for the
 current project. The project is mounted read-write, while the container home is
-ephemeral. AWS access is opt-in and, when configured, is supplied through a
-separate credential broker that assumes a configured role.
+ephemeral except for project-scoped OpenCode session data. AWS access is opt-in
+and, when configured, is supplied through a separate credential broker that
+assumes a configured role.
 
 ## Requirements
 
@@ -70,7 +71,9 @@ wisp
 
 Wisp uses `$XDG_CONFIG_HOME/wisp/config.toml`, falling back to
 `$HOME/.config/wisp/config.toml`. Host OpenCode config and authentication are
-mounted read-only when present.
+mounted read-only when present. OpenCode session data is persisted separately
+for each project under `$XDG_DATA_HOME/wisp/projects`, falling back to
+`$HOME/.local/share/wisp/projects`.
 
 ## Usage
 

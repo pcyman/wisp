@@ -107,6 +107,30 @@ func TestRunWithoutAWSDoesNotStartBrokerOrGenerateToken(t *testing.T) {
 		if testEnvironmentValue(command.Env, "WISP_AWS_AUTHORIZATION_TOKEN") != "" || testEnvironmentValue(command.Env, "WISP_AWS_ALIAS") != "" {
 			return errors.New("AWS environment reached disabled run")
 		}
+		runIndex := indexSlice(command.Args, []string{"run", "--rm"})
+		if runIndex < 2 || command.Args[runIndex-2] != "--file" {
+			return fmt.Errorf("override file not found in Compose arguments: %v", command.Args)
+		}
+		contents, err := os.ReadFile(command.Args[runIndex-1])
+		if err != nil {
+			return err
+		}
+		var override struct {
+			Services map[string]struct {
+				Volumes []struct {
+					Source   string `json:"source"`
+					Target   string `json:"target"`
+					ReadOnly bool   `json:"read_only"`
+				} `json:"volumes"`
+			} `json:"services"`
+		}
+		if err := json.Unmarshal(contents, &override); err != nil {
+			return err
+		}
+		volumes := override.Services["sandbox"].Volumes
+		if len(volumes) != 2 || volumes[1].Target != "/run/wisp/opencode/data/opencode" || volumes[1].ReadOnly {
+			return fmt.Errorf("sandbox volumes do not include writable OpenCode data: %s", contents)
+		}
 		return nil
 	}
 

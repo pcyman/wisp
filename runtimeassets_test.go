@@ -19,6 +19,7 @@ func TestSandboxComposeHardening(t *testing.T) {
 	sandbox := compose[index+len(marker):]
 	for _, required := range []string{
 		"      TMPDIR: /run/wisp/tmp\n",
+		"      XDG_DATA_HOME: /run/wisp/opencode/data\n",
 		"    read_only: true\n",
 		"    cap_drop:\n      - ALL\n",
 		"    security_opt:\n      - no-new-privileges:true\n",

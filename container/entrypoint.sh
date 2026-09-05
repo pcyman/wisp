@@ -6,11 +6,6 @@ if [ -d /run/wisp/opencode/config ]; then
     ln -s -- /run/wisp/opencode/config "${HOME}/.config/opencode"
 fi
 
-if [ -f /run/wisp/opencode/auth.json ]; then
-    mkdir -p -- "${HOME}/.local/share/opencode"
-    ln -s -- /run/wisp/opencode/auth.json "${HOME}/.local/share/opencode/auth.json"
-fi
-
 if [ -n "${AWS_CONTAINER_CREDENTIALS_FULL_URI:-}" ]; then
     aws_configuration="$(
         curl \

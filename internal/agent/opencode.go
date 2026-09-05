@@ -7,7 +7,11 @@ import (
 
 const (
 	openCodeConfigTarget = "/run/wisp/opencode/config"
-	openCodeAuthTarget   = "/run/wisp/opencode/auth.json"
+	// OpenCodeDataTarget is OpenCode's writable application directory beneath
+	// the sandbox's XDG_DATA_HOME. Keep it outside HOME so Docker does not
+	// create root-owned parents that block OpenCode from creating XDG state.
+	OpenCodeDataTarget = "/run/wisp/opencode/data/opencode"
+	openCodeAuthTarget = OpenCodeDataTarget + "/auth.json"
 )
 
 // OpenCode is Wisp's interactive sandbox agent.

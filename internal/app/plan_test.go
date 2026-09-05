@@ -155,7 +155,7 @@ mode = "rw"
 	wantTargets := []string{
 		"/workspace/current",
 		"/run/wisp/opencode/config",
-		"/run/wisp/opencode/auth.json",
+		"/run/wisp/opencode/data/opencode/auth.json",
 		"/workspace/repos/configured",
 		"/workspace/repos/cli",
 	}
@@ -186,6 +186,9 @@ mode = "rw"
 	if plan.RuntimeDirectories.Assets != filepath.Join(home, ".cache", "wisp", "runtime") ||
 		plan.RuntimeDirectories.Private != filepath.Join(root, "wisp-"+plan.Environment["WISP_UID"]) {
 		t.Fatalf("runtime directories = %#v", plan.RuntimeDirectories)
+	}
+	if plan.OpenCodeDataRoot != filepath.Join(home, ".local", "share", "wisp") {
+		t.Fatalf("OpenCode data root = %q", plan.OpenCodeDataRoot)
 	}
 	if len(plan.Warnings) != 0 {
 		t.Fatalf("warnings = %q", plan.Warnings)
@@ -310,6 +313,33 @@ func TestPlanRuntimeDirectoriesFallsBackToPrivateTempRoot(t *testing.T) {
 	}
 	if directories.Private != filepath.Join(root, "wisp-"+strconv.Itoa(os.Getuid())) {
 		t.Fatalf("private runtime root = %q", directories.Private)
+	}
+}
+
+func TestPlanOpenCodeDataRootUsesXDGDataHome(t *testing.T) {
+	root := t.TempDir()
+	got, err := planOpenCodeDataRoot(HostEnvironment{Home: filepath.Join(root, "home"), XDGDataHome: filepath.Join(root, "data")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(root, "data", "wisp"); got != want {
+		t.Fatalf("OpenCode data root = %q, want %q", got, want)
+	}
+}
+
+func TestPlanOpenCodeDataRootRejectsMissingOrRelativeBase(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		env  HostEnvironment
+	}{
+		{name: "missing"},
+		{name: "relative XDG", env: HostEnvironment{Home: t.TempDir(), XDGDataHome: "data"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := planOpenCodeDataRoot(test.env); err == nil {
+				t.Fatal("invalid OpenCode data base was accepted")
+			}
+		})
 	}
 }
 

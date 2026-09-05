@@ -61,6 +61,7 @@ services:
       HOME: /home/sandbox
       KUBECONFIG: /home/sandbox/.kube/config
       TMPDIR: /run/wisp/tmp
+      XDG_DATA_HOME: /run/wisp/opencode/data
       TERM: ${TERM:-}
       COLORTERM: ${COLORTERM:-}
     labels:

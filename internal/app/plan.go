@@ -71,6 +71,7 @@ type SandboxPlan struct {
 	AgentName          string
 	Command            []string
 	Mounts             []docker.Mount
+	OpenCodeDataRoot   string
 	Environment        map[string]string
 	RuntimeDirectories RuntimeDirectories
 	Warnings           []config.Warning
@@ -147,6 +148,10 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 	if err != nil {
 		return SandboxPlan{}, err
 	}
+	openCodeDataRoot, err := planOpenCodeDataRoot(options.Environment)
+	if err != nil {
+		return SandboxPlan{}, err
+	}
 	selectedAgent := agent.Default()
 	projectMount, err := docker.Bind(resolvedProject.RootDir, projectTarget, false)
 	if err != nil {
@@ -198,10 +203,25 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 		AgentName:          selectedAgent.Name(),
 		Command:            append([]string(nil), selectedAgent.ContainerCommand()...),
 		Mounts:             plannedMounts,
+		OpenCodeDataRoot:   openCodeDataRoot,
 		Environment:        environment,
 		RuntimeDirectories: directories,
 		Warnings:           append([]config.Warning(nil), loaded.Warnings...),
 	}, nil
+}
+
+func planOpenCodeDataRoot(environment HostEnvironment) (string, error) {
+	base := environment.XDGDataHome
+	if base == "" {
+		if environment.Home == "" {
+			return "", fmt.Errorf("determine OpenCode data directory: neither XDG_DATA_HOME nor HOME is set")
+		}
+		base = filepath.Join(environment.Home, ".local", "share")
+	}
+	if !filepath.IsAbs(base) {
+		return "", fmt.Errorf("OpenCode data base %q is not absolute", base)
+	}
+	return filepath.Join(filepath.Clean(base), "wisp"), nil
 }
 
 func plannedEnvironment(options PlanOptions, cfg config.Config, alias, projectHash string) map[string]string {

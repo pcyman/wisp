@@ -38,6 +38,15 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 			status, resultErr = cleanupResult(status, resultErr, fmt.Errorf("release project lock: %w", closeErr), a.deps.Stderr)
 		}
 	}()
+	openCodeDataMount, err := prepareOpenCodeDataMount(plan.OpenCodeDataRoot, plan.Project.Hash, plan.UID)
+	if err != nil {
+		return 1, err
+	}
+	// Put the data directory before the read-only auth-file overlay nested
+	// beneath it. The project mount is always the first planned mount.
+	sandboxMounts := make([]docker.Mount, 0, len(plan.Mounts)+1)
+	sandboxMounts = append(sandboxMounts, plan.Mounts[0], openCodeDataMount)
+	sandboxMounts = append(sandboxMounts, plan.Mounts[1:]...)
 
 	assetRoot, err := runtimeassets.Materialize(a.deps.RuntimeAssets, runtimeassets.Environment{XDGCacheHome: a.env.XDGCacheHome, Home: a.env.Home})
 	if err != nil {
@@ -55,7 +64,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 				return docker.Override{}, err
 			}
 		}
-		return docker.NewRunOverride(plan.Command, credentials, plan.Mounts)
+		return docker.NewRunOverride(plan.Command, credentials, sandboxMounts)
 	})
 	if err != nil {
 		return 1, err
