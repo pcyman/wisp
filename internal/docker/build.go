@@ -92,14 +92,14 @@ func (c *Client) EnsureImages(ctx context.Context, request BuildRequest) (built 
 	}
 
 	builder := fmt.Sprintf("wisp-%d-%dcpu", request.UID, request.CPUs)
-	stopBuilder, builderErr := c.ensureBuilder(ctx, builder, request.CPUs)
-	if stopBuilder {
+	removeBuilder, builderErr := c.ensureBuilder(ctx, builder, request.CPUs)
+	if removeBuilder {
 		defer func() {
 			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 			defer cancel()
-			_, stderr, stopErr := c.capture(cleanupCtx, []string{"buildx", "stop", builder}, "", nil)
-			if stopErr != nil {
-				err = errors.Join(err, commandError("stop Buildx builder "+builder, stderr, stopErr))
+			_, stderr, removeErr := c.capture(cleanupCtx, []string{"buildx", "rm", "--keep-state", "--force", builder}, "", nil)
+			if removeErr != nil {
+				err = errors.Join(err, commandError("remove Buildx builder "+builder, stderr, removeErr))
 			}
 		}()
 	}
@@ -118,9 +118,13 @@ func (c *Client) EnsureImages(ctx context.Context, request BuildRequest) (built 
 }
 
 func (c *Client) ensureBuilder(ctx context.Context, name string, cpus int) (bool, error) {
-	stdout, stderr, err := c.capture(ctx, []string{"buildx", "inspect", name, "--format", "{{.Driver}}"}, "", nil)
+	stdout, stderr, err := c.capture(ctx, []string{"buildx", "inspect", name}, "", nil)
 	if err == nil {
-		if driver := strings.TrimSpace(string(stdout)); driver != "docker-container" {
+		driver, parseErr := builderDriver(stdout)
+		if parseErr != nil {
+			return false, parseErr
+		}
+		if driver != "docker-container" {
 			return false, fmt.Errorf("Buildx builder %q uses driver %q, expected docker-container", name, driver)
 		}
 		return true, nil
@@ -134,11 +138,23 @@ func (c *Client) ensureBuilder(ctx context.Context, name string, cpus int) (bool
 		"--driver-opt", "cpu-period=100000", "--driver-opt", "cpu-quota=" + quota,
 	}, "", nil)
 	if err != nil {
-		// Creation may have reached the daemon before the CLI failed. A stop is
-		// safe and keeps partially started builder state from surviving.
+		// Creation may have reached the daemon before the CLI failed. Cleanup is
+		// safe and prevents a partially started builder container from surviving.
 		return true, commandError("create Buildx builder "+name, stderr, err)
 	}
 	return true, nil
+}
+
+func builderDriver(output []byte) (string, error) {
+	for _, line := range strings.Split(string(output), "\n") {
+		key, value, found := strings.Cut(line, ":")
+		if found && strings.TrimSpace(key) == "Driver" {
+			if driver := strings.TrimSpace(value); driver != "" {
+				return driver, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("inspect Buildx builder: output does not contain a driver")
 }
 
 func missingBuilder(stderr []byte) bool {

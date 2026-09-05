@@ -2,10 +2,12 @@ package process
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -43,6 +45,20 @@ func TestOSRunnerAttachedUsesProvidedStreams(t *testing.T) {
 	}
 }
 
+func TestOSRunnerAttachedKeepsChildInCallingProcessGroup(t *testing.T) {
+	err := (OSRunner{}).Attached(context.Background(), Command{
+		Path: os.Args[0],
+		Args: []string{"-test.run=TestProcessHelper"},
+		Env: append(os.Environ(),
+			"GO_WANT_PROCESS_GROUP_CHECK=1",
+			fmt.Sprintf("EXPECTED_PROCESS_GROUP=%d", syscall.Getpgrp()),
+		),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestExitCode(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestProcessHelper")
 	cmd.Env = append(os.Environ(), "GO_WANT_PROCESS_HELPER_EXIT=1")
@@ -71,7 +87,7 @@ func TestExitCodeForSignaledChildren(t *testing.T) {
 	}
 }
 
-func TestOSRunnerAttachedForwardsSignalToProcessGroup(t *testing.T) {
+func TestOSRunnerAttachedForwardsSIGTERMToChild(t *testing.T) {
 	ready := filepath.Join(t.TempDir(), "ready")
 	var stdout strings.Builder
 	done := make(chan error, 1)
@@ -110,6 +126,13 @@ func TestOSRunnerAttachedForwardsSignalToProcessGroup(t *testing.T) {
 }
 
 func TestProcessHelper(t *testing.T) {
+	if os.Getenv("GO_WANT_PROCESS_GROUP_CHECK") == "1" {
+		expected, err := strconv.Atoi(os.Getenv("EXPECTED_PROCESS_GROUP"))
+		if err != nil || syscall.Getpgrp() != expected {
+			os.Exit(2)
+		}
+		os.Exit(0)
+	}
 	if signalName := os.Getenv("GO_WANT_PROCESS_SELF_SIGNAL"); signalName != "" {
 		signalValue := syscall.SIGINT
 		if signalName == syscall.SIGTERM.String() {

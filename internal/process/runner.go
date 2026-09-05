@@ -44,23 +44,13 @@ func (OSRunner) Capture(ctx context.Context, command Command) ([]byte, []byte, e
 	return stdout.Bytes(), stderr.Bytes(), err
 }
 
-// Attached runs the child in a separate process group and forwards SIGINT and
-// SIGTERM to that group, leaving this process alive to perform cleanup.
+// Attached keeps the child in Wisp's process group so an interactive terminal
+// can make both processes foreground jobs. Wisp consumes SIGINT and SIGTERM so
+// the child can exit first and callers can perform cleanup afterward. The
+// terminal delivers SIGINT to the child directly; SIGTERM is also forwarded to
+// support callers that target only the Wisp process.
 func (OSRunner) Attached(ctx context.Context, command Command) error {
 	cmd := execCommand(ctx, command)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		if cmd.Process == nil {
-			return os.ErrProcessDone
-		}
-		if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); err != nil {
-			if errors.Is(err, syscall.ESRCH) {
-				return os.ErrProcessDone
-			}
-			return err
-		}
-		return nil
-	}
 	if cmd.Stdin == nil {
 		cmd.Stdin = os.Stdin
 	}
@@ -80,13 +70,11 @@ func (OSRunner) Attached(ctx context.Context, command Command) error {
 	go func() {
 		defer close(done)
 		for sig := range signals {
-			unixSignal, ok := sig.(syscall.Signal)
-			if ok {
-				_ = syscall.Kill(-cmd.Process.Pid, unixSignal)
+			if sig == syscall.SIGTERM {
+				_ = cmd.Process.Signal(sig)
 			}
 		}
 	}()
-
 	err := cmd.Wait()
 	signal.Stop(signals)
 	close(signals)

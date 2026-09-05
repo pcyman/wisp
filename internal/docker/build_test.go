@@ -23,7 +23,7 @@ func TestEnsureImagesBuildsMissingAndCreatesBuilder(t *testing.T) {
 			{stderr: "no builder found", err: errors.New("exit 1")},
 			{stdout: "builder"},
 			{stdout: "bootstrapped"},
-			{stdout: "stopped"},
+			{stdout: "removed"},
 		},
 		attachedResults: []error{nil},
 	}
@@ -50,18 +50,18 @@ func TestEnsureImagesBuildsMissingAndCreatesBuilder(t *testing.T) {
 	if !reflect.DeepEqual(gotBuild[len(gotBuild)-len(wantBuildSuffix):], wantBuildSuffix) {
 		t.Fatalf("build args = %v", gotBuild)
 	}
-	if got := runner.captured[len(runner.captured)-1].Args; !reflect.DeepEqual(got, []string{"buildx", "stop", "wisp-7-3cpu"}) {
-		t.Fatalf("stop args = %v", got)
+	if got := runner.captured[len(runner.captured)-1].Args; !reflect.DeepEqual(got, []string{"buildx", "rm", "--keep-state", "--force", "wisp-7-3cpu"}) {
+		t.Fatalf("remove args = %v", got)
 	}
 }
 
-func TestEnsureImagesStopsBuilderAfterBuildFailure(t *testing.T) {
+func TestEnsureImagesRemovesBuilderAfterBuildFailure(t *testing.T) {
 	runner := &fakeRunner{
 		captureResults: []fakeResult{
 			{stdout: "github.com/docker/buildx v0.11.0"},
-			{stdout: "docker-container"},
+			{stdout: "Name: wisp-10-2cpu\nDriver: docker-container\n"},
 			{stdout: "bootstrapped"},
-			{stdout: "stopped"},
+			{stdout: "removed"},
 		},
 		attachedResults: []error{errors.New("build failed")},
 	}
@@ -74,8 +74,18 @@ func TestEnsureImagesStopsBuilderAfterBuildFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("build failure was ignored")
 	}
-	if got := runner.captured[len(runner.captured)-1].Args; !reflect.DeepEqual(got, []string{"buildx", "stop", "wisp-10-2cpu"}) {
+	if got := runner.captured[len(runner.captured)-1].Args; !reflect.DeepEqual(got, []string{"buildx", "rm", "--keep-state", "--force", "wisp-10-2cpu"}) {
 		t.Fatalf("final command = %v (build error: %v)", got, err)
+	}
+}
+
+func TestBuilderDriver(t *testing.T) {
+	driver, err := builderDriver([]byte("Name: builder\nDriver:        docker-container\nNodes:\n"))
+	if err != nil || driver != "docker-container" {
+		t.Fatalf("driver = %q, error = %v", driver, err)
+	}
+	if _, err := builderDriver([]byte("Name: builder\nNodes:\n")); err == nil {
+		t.Fatal("missing driver was accepted")
 	}
 }
 
@@ -160,12 +170,12 @@ func (r *imageAppearsRunner) inspectCount() int {
 	return r.inspects
 }
 
-func TestEnsureImagesStopsAfterBuilderCreateFailure(t *testing.T) {
+func TestEnsureImagesRemovesAfterBuilderCreateFailure(t *testing.T) {
 	runner := &fakeRunner{captureResults: []fakeResult{
 		{stdout: "github.com/docker/buildx v0.11.0"},
 		{stderr: "no builder found", err: errors.New("exit 1")},
 		{stderr: "create failed", err: errors.New("exit 1")},
-		{stdout: "stopped"},
+		{stdout: "removed"},
 	}}
 	root := t.TempDir()
 	_, err := NewClient(runner).EnsureImages(context.Background(), BuildRequest{
@@ -176,7 +186,7 @@ func TestEnsureImagesStopsAfterBuilderCreateFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("builder creation failure was ignored")
 	}
-	if got := runner.captured[len(runner.captured)-1].Args; !reflect.DeepEqual(got, []string{"buildx", "stop", "wisp-10-2cpu"}) {
+	if got := runner.captured[len(runner.captured)-1].Args; !reflect.DeepEqual(got, []string{"buildx", "rm", "--keep-state", "--force", "wisp-10-2cpu"}) {
 		t.Fatalf("final command = %v", got)
 	}
 }
