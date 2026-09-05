@@ -27,6 +27,7 @@ go = ""
 boto3 = "1.35.99"
 
 [opencode]
+# config_path = "~/.config/opencode"
 
 # AWS is opt-in. Uncomment this table and at least one alias to enable it.
 # [aws]
