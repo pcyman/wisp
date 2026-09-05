@@ -6,12 +6,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"os"
 	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"wisp/internal/hostpath"
 )
 
 const containerRoot = "/workspace/current"
@@ -105,19 +106,9 @@ func PhysicalDirectory(name, baseDir string) (string, error) {
 	}
 	resolved = filepath.Clean(resolved)
 
-	physical, err := filepath.EvalSymlinks(resolved)
+	physical, info, err := hostpath.Resolve(resolved)
 	if err != nil {
-		return "", fmt.Errorf("%q: %w", resolved, err)
-	}
-	physical, err = filepath.Abs(physical)
-	if err != nil {
-		return "", fmt.Errorf("make %q absolute: %w", physical, err)
-	}
-	physical = filepath.Clean(physical)
-
-	info, err := os.Stat(physical)
-	if err != nil {
-		return "", fmt.Errorf("stat %q: %w", physical, err)
+		return "", err
 	}
 	if !info.IsDir() {
 		return "", fmt.Errorf("%q is not a directory", physical)

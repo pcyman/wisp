@@ -3,19 +3,15 @@ package mount
 
 import (
 	"fmt"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
+
+	"wisp/internal/hostpath"
+	"wisp/internal/mountpolicy"
 )
 
-const repositoriesRoot = "/workspace/repos"
-
-var reservedTargets = []string{
-	"/workspace/current",
-	"/home/sandbox",
-	"/run/wisp",
-}
+const repositoriesRoot = mountpolicy.RepositoriesRoot
 
 // Mode is the access mode of a repository bind mount.
 type Mode string
@@ -92,27 +88,7 @@ func Plan(config []Spec, readOnlyCLI, readWriteCLI []string, configDir, invocati
 
 // ValidateTarget applies the complete extra-repository container target policy.
 func ValidateTarget(target string) error {
-	if target == "" {
-		return fmt.Errorf("target is empty")
-	}
-	if strings.IndexByte(target, 0) >= 0 {
-		return fmt.Errorf("target contains a NUL byte")
-	}
-	if !path.IsAbs(target) {
-		return fmt.Errorf("target %q is not absolute", target)
-	}
-	if cleaned := path.Clean(target); cleaned != target {
-		return fmt.Errorf("target %q is not clean (use %q)", target, cleaned)
-	}
-	if !isDescendant(target, repositoriesRoot) {
-		return fmt.Errorf("target %q must be a descendant of %q", target, repositoriesRoot)
-	}
-	for _, reserved := range reservedTargets {
-		if overlaps(target, reserved) {
-			return fmt.Errorf("target %q overlaps reserved path %q", target, reserved)
-		}
-	}
-	return nil
+	return mountpolicy.ValidateTarget(target)
 }
 
 func resolveSource(source, baseDir, home string, expandHome bool) (string, error) {
@@ -135,18 +111,9 @@ func resolveSource(source, baseDir, home string, expandHome bool) (string, error
 		source = filepath.Join(baseDir, source)
 	}
 	source = filepath.Clean(source)
-	physical, err := filepath.EvalSymlinks(source)
+	physical, info, err := hostpath.Resolve(source)
 	if err != nil {
-		return "", fmt.Errorf("resolve %q: %w", source, err)
-	}
-	physical, err = filepath.Abs(physical)
-	if err != nil {
-		return "", fmt.Errorf("make %q absolute: %w", physical, err)
-	}
-	physical = filepath.Clean(physical)
-	info, err := os.Stat(physical)
-	if err != nil {
-		return "", fmt.Errorf("stat %q: %w", physical, err)
+		return "", err
 	}
 	if !info.IsDir() {
 		return "", fmt.Errorf("%q is not a directory", physical)
@@ -167,18 +134,10 @@ func validateCollisions(mounts []Mount) error {
 			if mounts[i].Target == mounts[j].Target {
 				return fmt.Errorf("mount targets collide: %q is used more than once", mounts[i].Target)
 			}
-			if overlaps(mounts[i].Target, mounts[j].Target) {
+			if mountpolicy.Overlaps(mounts[i].Target, mounts[j].Target) {
 				return fmt.Errorf("mount targets overlap: %q and %q", mounts[j].Target, mounts[i].Target)
 			}
 		}
 	}
 	return nil
-}
-
-func overlaps(a, b string) bool {
-	return a == b || isDescendant(a, b) || isDescendant(b, a)
-}
-
-func isDescendant(candidate, parent string) bool {
-	return strings.HasPrefix(candidate, parent+"/")
 }

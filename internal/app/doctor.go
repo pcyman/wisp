@@ -101,6 +101,7 @@ func (a *App) doctor(ctx context.Context, override string) int {
 			report.line("FAIL", check, "not available because config validation failed")
 		}
 	} else {
+		paths := config.DiagnoseHostPaths(effective, configPath, configEnv)
 		if !effective.AWS.Enabled {
 			report.line("PASS", "AWS support", "disabled")
 		} else {
@@ -109,12 +110,10 @@ func (a *App) doctor(ctx context.Context, override string) int {
 			} else {
 				report.line("PASS", "AWS alias", alias)
 			}
-			paths := config.DiagnoseHostPaths(effective, configPath, configEnv)
 			reportHostPath(report, "AWS config", paths.AWSConfig, true)
 			reportHostPath(report, "AWS credentials", paths.AWSCredentials, true)
 			reportHostPath(report, "AWS SSO cache", paths.AWSSSOCache, true)
 		}
-		paths := config.DiagnoseHostPaths(effective, configPath, configEnv)
 		reportHostPath(report, "OpenCode config", paths.OpenCodeConfig, true)
 		reportHostPath(report, "OpenCode auth", paths.OpenCodeAuth, true)
 		if mountValidationErr == nil {

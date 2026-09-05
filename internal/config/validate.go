@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+
+	"wisp/internal/hostpath"
+	"wisp/internal/mountpolicy"
 )
 
 var (
@@ -203,15 +205,12 @@ func resolveMount(index int, raw RawMountConfig) (MountConfig, error) {
 
 func validateMountTargets(mounts []MountConfig) error {
 	for i, mount := range mounts {
-		if strings.IndexByte(mount.Target, 0) >= 0 {
-			return fmt.Errorf("mounts[%d].target contains a NUL byte", i)
-		}
-		if !path.IsAbs(mount.Target) || path.Clean(mount.Target) != mount.Target || mount.Target == "/workspace/repos" || !strings.HasPrefix(mount.Target, "/workspace/repos/") {
-			return fmt.Errorf("mounts[%d].target %q must be a clean absolute descendant of /workspace/repos", i, mount.Target)
+		if err := mountpolicy.ValidateTarget(mount.Target); err != nil {
+			return fmt.Errorf("mounts[%d].target: %w", i, err)
 		}
 		for j := 0; j < i; j++ {
 			other := mounts[j].Target
-			if mount.Target == other || strings.HasPrefix(mount.Target, other+"/") || strings.HasPrefix(other, mount.Target+"/") {
+			if mountpolicy.Overlaps(mount.Target, other) {
 				return fmt.Errorf("mount targets %q and %q overlap", other, mount.Target)
 			}
 		}
@@ -470,16 +469,7 @@ const (
 )
 
 func requirePath(candidate string, kind requiredPathType) (string, error) {
-	physical, err := filepath.EvalSymlinks(candidate)
-	if err != nil {
-		return "", err
-	}
-	physical, err = filepath.Abs(physical)
-	if err != nil {
-		return "", err
-	}
-	physical = filepath.Clean(physical)
-	info, err := os.Stat(physical)
+	physical, info, err := hostpath.Resolve(candidate)
 	if err != nil {
 		return "", err
 	}

@@ -60,6 +60,7 @@ services:
     environment:
       HOME: /home/sandbox
       KUBECONFIG: /home/sandbox/.kube/config
+      TMPDIR: /run/wisp/tmp
       TERM: ${TERM:-}
       COLORTERM: ${COLORTERM:-}
     labels:
@@ -69,6 +70,16 @@ services:
       wisp.project-hash: "${WISP_PROJECT_HASH:-unknown}"
       wisp.version: "${WISP_CLI_VERSION:-development}"
     init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     tmpfs:
       - /home/sandbox:uid=${WISP_UID:-1000},gid=${WISP_GID:-1000},mode=0700
+      - /tmp:mode=1777
+      - /var/tmp:mode=1777
+      # OpenTUI and build tools load or execute artifacts from TMPDIR. Keep the
+      # general-purpose temporary directories noexec and scope exec narrowly.
+      - /run/wisp/tmp:exec,uid=${WISP_UID:-1000},gid=${WISP_GID:-1000},mode=0700
     working_dir: /workspace/current
