@@ -79,17 +79,18 @@ func TestPlanRunBuildsCompletePlanWithoutDocker(t *testing.T) {
 	cliRepo := filepath.Join(root, "cli")
 	openCodeConfig := filepath.Join(home, ".config", "opencode")
 	openCodeAuth := filepath.Join(home, ".local", "share", "opencode", "auth.json")
+	hunkConfig := filepath.Join(home, ".config", "hunk", "config.toml")
 	awsConfig := filepath.Join(home, ".aws", "config")
 	awsCache := filepath.Join(home, ".aws", "sso", "cache")
 	for _, directory := range []string{
 		configDir, requested, configuredRepo, cliRepo, openCodeConfig,
-		filepath.Dir(openCodeAuth), filepath.Dir(awsConfig), awsCache,
+		filepath.Dir(openCodeAuth), filepath.Dir(hunkConfig), filepath.Dir(awsConfig), awsCache,
 	} {
 		if err := os.MkdirAll(directory, 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for path, contents := range map[string]string{openCodeAuth: "{}", awsConfig: "[profile dev]\n"} {
+	for path, contents := range map[string]string{openCodeAuth: "{}", hunkConfig: "theme = \"dark\"\n", awsConfig: "[profile dev]\n"} {
 		if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -156,6 +157,7 @@ mode = "rw"
 		"/workspace/current",
 		"/run/wisp/opencode/config",
 		"/run/wisp/opencode/data/opencode/auth.json",
+		"/run/wisp/hunk/config.toml",
 		"/workspace/repos/configured",
 		"/workspace/repos/cli",
 	}
@@ -167,7 +169,7 @@ mode = "rw"
 			t.Fatalf("mount %d target = %q, want %q", i, plan.Mounts[i].Target, target)
 		}
 	}
-	if plan.Mounts[0].ReadOnly || !plan.Mounts[1].ReadOnly || !plan.Mounts[2].ReadOnly || plan.Mounts[3].ReadOnly || !plan.Mounts[4].ReadOnly {
+	if plan.Mounts[0].ReadOnly || !plan.Mounts[1].ReadOnly || !plan.Mounts[2].ReadOnly || !plan.Mounts[3].ReadOnly || plan.Mounts[4].ReadOnly || !plan.Mounts[5].ReadOnly {
 		t.Fatalf("unexpected mount modes: %#v", plan.Mounts)
 	}
 	if _, exists := plan.Environment["WISP_AWS_AUTHORIZATION_TOKEN"]; exists {
@@ -231,8 +233,8 @@ role_arn = "arn:aws:iam::123456789012:role/Wisp"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.Warnings) != 2 {
-		t.Fatalf("warnings = %q, want config and auth warnings", plan.Warnings)
+	if len(plan.Warnings) != 3 {
+		t.Fatalf("warnings = %q, want OpenCode config, auth, and Hunk config warnings", plan.Warnings)
 	}
 	if len(plan.Mounts) != 1 || plan.Mounts[0].Target != "/workspace/current" {
 		t.Fatalf("mounts = %#v, want only project", plan.Mounts)

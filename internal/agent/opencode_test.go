@@ -17,13 +17,17 @@ func TestOpenCode(t *testing.T) {
 		t.Fatalf("ContainerCommand() = %#v", got)
 	}
 
-	cfg := config.Config{OpenCode: config.OpenCodeConfig{
-		ConfigPath: "/host/opencode",
-		AuthPath:   "/host/auth.json",
-	}}
+	cfg := config.Config{
+		OpenCode: config.OpenCodeConfig{
+			ConfigPath: "/host/opencode",
+			AuthPath:   "/host/auth.json",
+		},
+		Hunk: config.HunkConfig{ConfigPath: "/host/hunk/config.toml"},
+	}
 	want := []docker.Mount{
 		{Type: "bind", Source: "/host/opencode", Target: "/run/wisp/opencode/config", ReadOnly: true, Bind: docker.BindMount{}},
 		{Type: "bind", Source: "/host/auth.json", Target: "/run/wisp/opencode/data/opencode/auth.json", ReadOnly: true, Bind: docker.BindMount{}},
+		{Type: "bind", Source: "/host/hunk/config.toml", Target: "/run/wisp/hunk/config.toml", ReadOnly: true, Bind: docker.BindMount{}},
 	}
 	if got, err := a.HostMounts(cfg); err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("HostMounts() = %#v, want %#v", got, want)

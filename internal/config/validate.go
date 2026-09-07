@@ -276,7 +276,7 @@ func ValidateHostPaths(cfg *Config, configPath string, env Environment) ([]Warni
 		}
 	}
 
-	warnings := make([]Warning, 0, 2)
+	warnings := make([]Warning, 0, 3)
 	if cfg.OpenCode.ConfigPathExplicit {
 		resolved, err := resolveTOMLPath(cfg.OpenCode.ConfigPath, configDir, env.Home)
 		if err != nil {
@@ -306,6 +306,26 @@ func ValidateHostPaths(cfg *Config, configPath string, env Environment) ([]Warni
 			} else {
 				cfg.OpenCode.ConfigPath = physical
 			}
+		}
+	}
+
+	configBase, err := xdgBase(env.XDGConfigHome, env.Home, ".config", "XDG_CONFIG_HOME")
+	if err != nil {
+		if env.XDGConfigHome != "" || env.Home != "" {
+			return nil, fmt.Errorf("resolve Hunk config path: %w", err)
+		}
+		warnings = append(warnings, Warning("Hunk config path is unavailable: "+err.Error()))
+	} else {
+		candidate := filepath.Join(configBase, "hunk", "config.toml")
+		physical, pathErr := requirePath(candidate, pathRegularFile)
+		if pathErr != nil {
+			if errors.Is(pathErr, os.ErrNotExist) {
+				warnings = append(warnings, Warning(fmt.Sprintf("Hunk config file %q does not exist; continuing with container defaults", candidate)))
+			} else {
+				return nil, fmt.Errorf("Hunk config path %q: %w", candidate, pathErr)
+			}
+		} else {
+			cfg.Hunk.ConfigPath = physical
 		}
 	}
 
@@ -347,6 +367,7 @@ type HostPathDiagnostics struct {
 	AWSSSOCache    HostPathDiagnostic
 	OpenCodeConfig HostPathDiagnostic
 	OpenCodeAuth   HostPathDiagnostic
+	HunkConfig     HostPathDiagnostic
 }
 
 // DiagnoseHostPaths checks all configured host paths without mutating cfg or
@@ -388,6 +409,21 @@ func DiagnoseHostPaths(cfg Config, configPath string, env Environment) HostPathD
 			result.OpenCodeConfig.Err = err
 		} else {
 			result.OpenCodeConfig.Path = physical
+		}
+	}
+
+	if base, err := xdgBase(env.XDGConfigHome, env.Home, ".config", "XDG_CONFIG_HOME"); err != nil {
+		result.HunkConfig.Warning = Warning("Hunk config path is unavailable: " + err.Error())
+	} else {
+		candidate := filepath.Join(base, "hunk", "config.toml")
+		result.HunkConfig.Path = candidate
+		physical, err := requirePath(candidate, pathRegularFile)
+		if errors.Is(err, os.ErrNotExist) {
+			result.HunkConfig.Warning = Warning(fmt.Sprintf("Hunk config file %q does not exist; continuing with container defaults", candidate))
+		} else if err != nil {
+			result.HunkConfig.Err = err
+		} else {
+			result.HunkConfig.Path = physical
 		}
 	}
 

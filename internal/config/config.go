@@ -74,6 +74,7 @@ type Config struct {
 	Images        ImageConfig
 	Build         BuildConfig
 	OpenCode      OpenCodeConfig
+	Hunk          HunkConfig
 	AWS           AWSConfig
 	Mounts        []MountConfig
 }
@@ -103,6 +104,10 @@ type OpenCodeConfig struct {
 	ConfigPath         string
 	ConfigPathExplicit bool
 	AuthPath           string
+}
+
+type HunkConfig struct {
+	ConfigPath string
 }
 
 type AWSConfig struct {

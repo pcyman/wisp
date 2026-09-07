@@ -16,12 +16,19 @@ func TestLoadResolvesPhysicalPathsAndWarnings(t *testing.T) {
 	linkMount := filepath.Join(configDir, "linked-repo")
 	awsConfig := filepath.Join(root, "aws", "config")
 	awsCache := filepath.Join(root, "aws", "cache")
+	hunkConfig := filepath.Join(root, ".config", "hunk", "config.toml")
 	for _, directory := range []string{configDir, realMount, filepath.Dir(awsConfig), awsCache} {
 		if err := os.MkdirAll(directory, 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if err := os.WriteFile(awsConfig, []byte("[profile development]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(hunkConfig), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(hunkConfig, []byte("theme = \"dark\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(realMount, linkMount); err != nil {
@@ -58,6 +65,9 @@ target = "/workspace/repos/repo"
 	}
 	if result.Config.Mounts[0].Source != physicalMount {
 		t.Fatalf("mount source = %q, want %q", result.Config.Mounts[0].Source, physicalMount)
+	}
+	if result.Config.Hunk.ConfigPath != hunkConfig {
+		t.Fatalf("Hunk config path = %q, want %q", result.Config.Hunk.ConfigPath, hunkConfig)
 	}
 	if len(result.Warnings) != 2 {
 		t.Fatalf("warnings = %q, want OpenCode config and auth warnings", result.Warnings)

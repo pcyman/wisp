@@ -6,6 +6,11 @@ if [ -d /run/wisp/opencode/config ]; then
     ln -s -- /run/wisp/opencode/config "${HOME}/.config/opencode"
 fi
 
+if [ -f /run/wisp/hunk/config.toml ]; then
+    mkdir -p -- "${HOME}/.config/hunk"
+    ln -s -- /run/wisp/hunk/config.toml "${HOME}/.config/hunk/config.toml"
+fi
+
 if [ -n "${AWS_CONTAINER_CREDENTIALS_FULL_URI:-}" ]; then
     aws_configuration="$(
         curl \
