@@ -69,6 +69,17 @@ Launch OpenCode for the current directory:
 wisp
 ```
 
+Launch Wisp inside [Herdr](https://herdr.dev/):
+
+```sh
+wisp herdr
+```
+
+This launches the normal OpenCode sandbox while identifying the host-side Wisp
+process to Herdr as an OpenCode agent. Herdr itself is not exposed inside the
+sandbox. The `herdr` command name is reserved; use `wisp ./herdr` or
+`wisp run herdr` to launch a directory named `herdr`.
+
 Wisp uses `$XDG_CONFIG_HOME/wisp/config.toml`, falling back to
 `$HOME/.config/wisp/config.toml`. Host OpenCode config and authentication are
 mounted read-only when present. Wisp also mounts only the host Hunk
@@ -80,7 +91,8 @@ data is persisted separately for each project under
 ## Usage
 
 ```text
-wisp [OPTIONS] [DIRECTORY]       Launch OpenCode
+wisp [RUN_OPTIONS] [DIRECTORY]   Launch OpenCode
+wisp herdr [RUN_OPTIONS] [DIRECTORY]
 wisp exec [DIRECTORY] -- COMMAND
 wisp hunk [DIRECTORY] [-- ARGS]
 wisp aws check [ALIAS]

@@ -77,6 +77,63 @@ func TestParseRunErrors(t *testing.T) {
 	}
 }
 
+func TestParseHerdrUsesRunGrammar(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want RunRequest
+		help bool
+	}{
+		{name: "default", args: []string{"herdr"}, want: RunRequest{Directory: "."}},
+		{name: "relative directory", args: []string{"herdr", "."}, want: RunRequest{Directory: "."}},
+		{name: "absolute directory", args: []string{"herdr", "/tmp/project"}, want: RunRequest{Directory: "/tmp/project"}},
+		{name: "options before directory", args: []string{"herdr", "--aws", "dev", "--mount", "../shared", "--rebuild", "/tmp/project"}, want: RunRequest{Directory: "/tmp/project", AWSAlias: "dev", Rebuild: true, ReadOnlyMounts: []string{"../shared"}}},
+		{name: "options after directory", args: []string{"herdr", "/tmp/project", "--aws", "dev", "--config=wisp.toml", "--mount-rw", "../shared"}, want: RunRequest{Directory: "/tmp/project", ConfigPath: "wisp.toml", AWSAlias: "dev", ReadWriteMounts: []string{"../shared"}}},
+		{name: "help", args: []string{"herdr", "--help"}, want: RunRequest{Directory: "."}, help: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Parse(tt.args)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+			if got.Command != CommandHerdr || got.ShowHelp != tt.help || !reflect.DeepEqual(got.Run, tt.want) {
+				t.Fatalf("Parse() = %#v, want Herdr run %#v, help %v", got, tt.want, tt.help)
+			}
+			if payload := got.Payload(); payload != nil {
+				t.Fatalf("Parse() payload = %q, want nil", payload)
+			}
+		})
+	}
+}
+
+func TestParseHerdrReservesCommandName(t *testing.T) {
+	reserved, err := Parse([]string{"herdr"})
+	if err != nil || reserved.Command != CommandHerdr {
+		t.Fatalf("Parse(herdr) = %#v, %v; want Herdr command", reserved, err)
+	}
+	for _, args := range [][]string{{"./herdr"}, {"run", "herdr"}} {
+		req, parseErr := Parse(args)
+		if parseErr != nil {
+			t.Fatalf("Parse(%q) error = %v", args, parseErr)
+		}
+		if req.Command != CommandRun || req.Run.Directory != args[len(args)-1] {
+			t.Fatalf("Parse(%q) = %#v, want ordinary run", args, req)
+		}
+	}
+}
+
+func TestParseHerdrErrorsMatchRun(t *testing.T) {
+	for _, suffix := range [][]string{{"--wat"}, {"one", "two"}, {"--aws"}, {"--rebuild", "--rebuild"}} {
+		_, runErr := Parse(append([]string{"run"}, suffix...))
+		_, herdrErr := Parse(append([]string{"herdr"}, suffix...))
+		if runErr == nil || herdrErr == nil || runErr.Error() != herdrErr.Error() {
+			t.Fatalf("suffix %q errors = run %v, Herdr %v; want equal errors", suffix, runErr, herdrErr)
+		}
+	}
+}
+
 func TestRunNeverHasPayload(t *testing.T) {
 	inputs := [][]string{
 		nil,
@@ -233,7 +290,7 @@ func TestParseAdministrativeErrors(t *testing.T) {
 
 func TestParseHelp(t *testing.T) {
 	topics := map[string]Command{
-		"run": CommandRun, "exec": CommandExec, "hunk": CommandHunk,
+		"run": CommandRun, "herdr": CommandHerdr, "exec": CommandExec, "hunk": CommandHunk,
 		"config": CommandConfig, "aws": CommandAWS, "doctor": CommandDoctor,
 		"version": CommandVersion, "help": CommandHelp,
 	}

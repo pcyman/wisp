@@ -11,6 +11,7 @@ type Command string
 const (
 	CommandRoot           Command = ""
 	CommandRun            Command = "run"
+	CommandHerdr          Command = "herdr"
 	CommandExec           Command = "exec"
 	CommandHunk           Command = "hunk"
 	CommandConfig         Command = "config"
@@ -95,6 +96,8 @@ func Parse(args []string) (Request, error) {
 	switch args[0] {
 	case "run":
 		return parseRun(args[1:])
+	case "herdr":
+		return parseHerdr(args[1:])
 	case "exec":
 		return parseExec(args[1:])
 	case "hunk":
@@ -115,6 +118,15 @@ func Parse(args []string) (Request, error) {
 	default:
 		return parseRun(args)
 	}
+}
+
+func parseHerdr(args []string) (Request, error) {
+	req, err := parseRun(args)
+	if err != nil {
+		return Request{}, err
+	}
+	req.Command = CommandHerdr
+	return req, nil
 }
 
 func parseRun(args []string) (Request, error) {
@@ -366,7 +378,7 @@ func parseHelp(args []string) (Request, error) {
 
 func helpCommand(topic string) (Command, bool) {
 	switch Command(topic) {
-	case CommandRun, CommandExec, CommandHunk, CommandConfig, CommandAWS,
+	case CommandRun, CommandHerdr, CommandExec, CommandHunk, CommandConfig, CommandAWS,
 		CommandDoctor, CommandVersion, CommandHelp:
 		return Command(topic), true
 	default:
