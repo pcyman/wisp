@@ -95,6 +95,7 @@ wisp [RUN_OPTIONS] [DIRECTORY]   Launch OpenCode
 wisp herdr [RUN_OPTIONS] [DIRECTORY]
 wisp exec [DIRECTORY] -- COMMAND
 wisp hunk [DIRECTORY] [-- ARGS]
+wisp agents --json
 wisp aws check [ALIAS]
 wisp doctor
 ```

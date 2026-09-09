@@ -6,6 +6,10 @@ if [ -d /run/wisp/opencode/config ]; then
     ln -s -- /run/wisp/opencode/config "${HOME}/.config/opencode"
 fi
 
+# Load the dependency-free reporter directly, without adding a config-discovery
+# directory (OpenCode installs directory dependencies during startup).
+export OPENCODE_CONFIG=/usr/local/share/wisp/opencode.json
+
 if [ -f /run/wisp/hunk/config.toml ]; then
     mkdir -p -- "${HOME}/.config/hunk"
     ln -s -- /run/wisp/hunk/config.toml "${HOME}/.config/hunk/config.toml"

@@ -67,6 +67,7 @@ services:
     labels:
       wisp.managed: "true"
       wisp.kind: sandbox
+      wisp.run-id: "${WISP_RUN_ID:-}"
       wisp.owner-uid: "${WISP_UID:-1000}"
       wisp.project-hash: "${WISP_PROJECT_HASH:-unknown}"
       wisp.version: "${WISP_CLI_VERSION:-development}"

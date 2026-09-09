@@ -141,6 +141,11 @@ RUN groupadd --gid 1000 sandbox \
     && chown -R sandbox:sandbox /workspace /home/sandbox
 
 COPY --chmod=0755 container/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN install -d -m 0755 /usr/local/share/wisp
+COPY --chmod=0644 container/agent-status.js /usr/local/share/wisp/agent-status.js
+COPY --chmod=0644 container/opencode.json /usr/local/share/wisp/opencode.json
+# Ensure COPY cannot leave the plugin directory inaccessible to the runtime UID.
+RUN chmod 0755 /usr/local/share/wisp
 
 ENV HOME=/home/sandbox \
     GIT_CONFIG_COUNT=1 \
@@ -149,5 +154,7 @@ ENV HOME=/home/sandbox \
     PATH=/usr/local/go/bin:${PATH}
 
 USER sandbox
+RUN test -r /usr/local/share/wisp/agent-status.js
+RUN test -r /usr/local/share/wisp/opencode.json
 WORKDIR /workspace/current
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

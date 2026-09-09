@@ -12,7 +12,8 @@ import (
 )
 
 var privateEnvironment = map[string]struct{}{
-	"WISP_IMAGE": {}, "WISP_CREDENTIALS_IMAGE": {}, "WISP_UID": {},
+	"WISP_RUN_ID": {},
+	"WISP_IMAGE":  {}, "WISP_CREDENTIALS_IMAGE": {}, "WISP_UID": {},
 	"WISP_GID": {}, "WISP_AWS_ALIAS": {}, "WISP_AWS_AUTHORIZATION_TOKEN": {},
 	"WISP_PROJECT_HASH": {}, "WISP_CLI_VERSION": {}, "OPENCODE_VERSION": {},
 	"HUNK_VERSION": {}, "AWS_CLI_VERSION": {}, "KUBECTL_VERSION": {},

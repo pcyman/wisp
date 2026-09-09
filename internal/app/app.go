@@ -95,6 +95,8 @@ func (a *App) Execute(ctx context.Context, request cli.Request) int {
 	var status int
 	var err error
 	switch request.Command {
+	case cli.CommandAgents:
+		status, err = a.agents(ctx)
 	case cli.CommandConfigPath, cli.CommandConfigInit, cli.CommandConfigValidate:
 		status, err = a.config(request)
 	case cli.CommandRun:

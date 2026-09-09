@@ -1,3 +1,5 @@
 **
 !container/
 !container/entrypoint.sh
+!container/agent-status.js
+!container/opencode.json

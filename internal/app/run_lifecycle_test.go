@@ -128,7 +128,7 @@ func TestRunWithoutAWSDoesNotStartBrokerOrGenerateToken(t *testing.T) {
 			return err
 		}
 		volumes := override.Services["sandbox"].Volumes
-		if len(volumes) != 2 || volumes[1].Target != "/run/wisp/opencode/data/opencode" || volumes[1].ReadOnly {
+		if len(volumes) != 3 || volumes[1].Target != "/run/wisp/opencode/data/opencode" || volumes[1].ReadOnly {
 			return fmt.Errorf("sandbox volumes do not include writable OpenCode data: %s", contents)
 		}
 		return nil

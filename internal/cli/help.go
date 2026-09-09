@@ -5,6 +5,7 @@ const rootHelp = `Usage:
   wisp COMMAND [ARGUMENTS]
 
 Commands:
+  agents    List running Wisp agents as JSON
   run       Launch OpenCode in the sandbox
   herdr     Launch OpenCode with Herdr integration
   exec      Execute a command in a running sandbox
@@ -19,6 +20,11 @@ Use "wisp help COMMAND" for command help.
 `
 
 var commandHelp = map[Command]string{
+	CommandAgents: `Usage:
+  wisp agents --json
+
+Lists verified running sandboxes. Reporter timestamps are advisory, not liveness.
+`,
 	CommandRun: `Usage:
   wisp [RUN_OPTIONS] [DIRECTORY]
   wisp run [RUN_OPTIONS] [DIRECTORY]

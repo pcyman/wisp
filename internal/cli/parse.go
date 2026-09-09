@@ -11,6 +11,7 @@ type Command string
 const (
 	CommandRoot           Command = ""
 	CommandRun            Command = "run"
+	CommandAgents         Command = "agents"
 	CommandHerdr          Command = "herdr"
 	CommandExec           Command = "exec"
 	CommandHunk           Command = "hunk"
@@ -94,6 +95,14 @@ func Parse(args []string) (Request, error) {
 	}
 
 	switch args[0] {
+	case "agents":
+		if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
+			return Request{Command: CommandAgents, ShowHelp: true}, nil
+		}
+		if len(args) != 2 || args[1] != "--json" {
+			return Request{}, syntaxf("agents requires --json and accepts no other arguments")
+		}
+		return Request{Command: CommandAgents}, nil
 	case "run":
 		return parseRun(args[1:])
 	case "herdr":
@@ -378,7 +387,7 @@ func parseHelp(args []string) (Request, error) {
 
 func helpCommand(topic string) (Command, bool) {
 	switch Command(topic) {
-	case CommandRun, CommandHerdr, CommandExec, CommandHunk, CommandConfig, CommandAWS,
+	case CommandAgents, CommandRun, CommandHerdr, CommandExec, CommandHunk, CommandConfig, CommandAWS,
 		CommandDoctor, CommandVersion, CommandHelp:
 		return Command(topic), true
 	default:

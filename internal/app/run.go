@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"wisp/internal/agentstatus"
 	"wisp/internal/cli"
 	"wisp/internal/docker"
 	"wisp/internal/lock"
@@ -47,6 +48,22 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 	sandboxMounts := make([]docker.Mount, 0, len(plan.Mounts)+1)
 	sandboxMounts = append(sandboxMounts, plan.Mounts[0], openCodeDataMount)
 	sandboxMounts = append(sandboxMounts, plan.Mounts[1:]...)
+	registration, err := agentstatus.Register(runtimeRoot, agentstatus.Metadata{
+		Repo: plan.Project.RootDir, SandboxName: plan.Project.ContainerName,
+		ProjectHash: plan.Project.Hash, ComposeProject: plan.Project.ComposeProject, UID: plan.UID,
+	})
+	if err != nil {
+		return 1, fmt.Errorf("register agent: %w", err)
+	}
+	defer func() {
+		status, resultErr = cleanupResult(status, resultErr, registration.Cleanup(), a.deps.Stderr)
+	}()
+	statusMount, err := docker.Bind(registration.StatusDir, agentstatus.MountTarget, false)
+	if err != nil {
+		return 1, err
+	}
+	sandboxMounts = append(sandboxMounts, statusMount)
+	plan.Environment["WISP_RUN_ID"] = registration.RunID
 
 	assetRoot, err := runtimeassets.Materialize(a.deps.RuntimeAssets, runtimeassets.Environment{XDGCacheHome: a.env.XDGCacheHome, Home: a.env.Home})
 	if err != nil {
