@@ -27,6 +27,20 @@ The command requires `--json`, does not load project or user configuration, and
 does not materialize runtime assets. It does not contact Docker when there are
 no valid registry entries. Errors go to stderr with a nonzero exit status.
 
+`wisp agents --json --watch` (also `wisp agents --watch --json`) emits full
+snapshots with the identical schema as newline-delimited JSON (JSONL). It emits
+the initial snapshot immediately, then polls every second and emits only when
+the snapshot changes, including timestamps or removal of all agents. An empty
+snapshot is emitted initially when no agents are running and whenever the last
+agent disappears. There are no deltas, heartbeats, or extra watch-only fields.
+
+Each collection, in either mode, has a 10-second context timeout bounding its
+Docker calls. Collection failures, including Docker errors and timeouts, end the
+command with a nonzero status and an error on stderr; they never produce a
+fabricated empty snapshot. Stdout write failures also exit nonzero. Watch exits
+cleanly on context cancellation (including an interrupt), without a final
+snapshot. Watch has the same configuration and asset independence as one-shot.
+
 States are advisory summaries of observed OpenCode events, not process health:
 
 - `idle`: no observed active work or pending input; also used after cancellation
@@ -50,7 +64,7 @@ error text, or internal ownership metadata are returned.
 Each launch has one plugin writer and one atomically replaced current-status
 file. The reporter observes live events only: it does not replay session history
 or retain historical snapshots. Resumed sessions may remain ambiguous until
-their identity and activity are observed. There is no watch mode or desktop UI.
+their identity and activity are observed. There is no desktop UI.
 
 The host-only registry is under Wisp's private runtime root, normally
 `$XDG_RUNTIME_DIR/wisp/agents/<run-id>` or the private `wisp-<uid>` directory in

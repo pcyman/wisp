@@ -5,17 +5,143 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"wisp/internal/agentstatus"
 	"wisp/internal/cli"
 	"wisp/internal/lock"
 	"wisp/internal/process"
 )
+
+type agentSnapshotWriter func([]byte) (int, error)
+
+func (f agentSnapshotWriter) Write(p []byte) (int, error) { return f(p) }
+
+func TestWatchAgentSnapshots(t *testing.T) {
+	const empty = "{\"schema_version\":1,\"agents\":[]}\n"
+	const working = "{\"schema_version\":1,\"agents\":[{\"id\":\"run\",\"state\":\"working\"}]}\n"
+	const idle = "{\"schema_version\":1,\"agents\":[{\"id\":\"run\",\"state\":\"idle\"}]}\n"
+	snapshots := []string{empty, empty, working, working, idle, empty, empty}
+	priorOutput := []string{"", empty, empty, empty + working, empty + working, empty + working + idle, empty + working + idle + empty}
+	ticks := make(chan time.Time, 1)
+	var stdout bytes.Buffer
+	calls := 0
+	err := writeAgentSnapshots(context.Background(), &stdout, ticks, func(ctx context.Context) ([]byte, error) {
+		deadline, ok := ctx.Deadline()
+		if !ok || time.Until(deadline) <= 0 || time.Until(deadline) > 10*time.Second {
+			t.Fatalf("collection deadline=%v present=%v", deadline, ok)
+		}
+		if calls >= len(snapshots) {
+			t.Fatal("unexpected collection")
+		}
+		if stdout.String() != priorOutput[calls] {
+			t.Fatalf("collection %d output=%q want=%q", calls, stdout.String(), priorOutput[calls])
+		}
+		snapshot := snapshots[calls]
+		calls++
+		if calls == len(snapshots) {
+			close(ticks)
+		} else {
+			ticks <- time.Time{}
+		}
+		return []byte(snapshot), nil
+	})
+	if err != nil || calls != len(snapshots) || stdout.String() != empty+working+idle+empty {
+		t.Fatalf("calls=%d output=%q err=%v", calls, stdout.String(), err)
+	}
+}
+
+func TestWatchAgentSnapshotFailuresAndCancellation(t *testing.T) {
+	failure := errors.New("Docker unavailable")
+	for _, variant := range []string{"initial error", "later error", "timeout", "cancel before", "cancel collecting", "cancel waiting", "write error", "short write"} {
+		t.Run(variant, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if variant == "cancel before" {
+				cancel()
+			}
+			ticks := make(chan time.Time, 1)
+			var stdout bytes.Buffer
+			calls := 0
+			writer := agentSnapshotWriter(func(p []byte) (int, error) {
+				switch variant {
+				case "write error":
+					return 0, io.ErrClosedPipe
+				case "short write":
+					return 0, nil
+				case "cancel waiting":
+					cancel()
+				}
+				return stdout.Write(p)
+			})
+			err := writeAgentSnapshots(ctx, writer, ticks, func(collectionCtx context.Context) ([]byte, error) {
+				calls++
+				if calls > 2 {
+					t.Fatal("unexpected collection")
+				}
+				if variant == "initial error" || variant == "later error" && calls == 2 {
+					return nil, failure
+				}
+				if variant == "timeout" {
+					return nil, context.DeadlineExceeded
+				}
+				if variant == "cancel collecting" {
+					cancel()
+					<-collectionCtx.Done()
+					return nil, collectionCtx.Err()
+				}
+				if variant == "later error" {
+					ticks <- time.Time{}
+				}
+				return []byte("{\"schema_version\":1,\"agents\":[]}\n"), nil
+			})
+			var wantErr error
+			switch variant {
+			case "initial error", "later error":
+				wantErr = failure
+			case "timeout":
+				wantErr = context.DeadlineExceeded
+			case "write error":
+				wantErr = io.ErrClosedPipe
+			case "short write":
+				wantErr = io.ErrShortWrite
+			}
+			wantOutput := ""
+			if variant == "later error" || variant == "cancel waiting" {
+				wantOutput = "{\"schema_version\":1,\"agents\":[]}\n"
+			}
+			if !errors.Is(err, wantErr) || stdout.String() != wantOutput || variant == "cancel before" && calls != 0 {
+				t.Fatalf("calls=%d output=%q err=%v want=%v", calls, stdout.String(), err, wantErr)
+			}
+		})
+	}
+}
+
+func TestAgentsWatchNeedsNeitherDockerConfigNorAssets(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	runner := &recordingRunner{capture: func(process.Command) ([]byte, []byte, error) {
+		t.Fatal("unexpected process")
+		return nil, nil, nil
+	}}
+	a := newFixtureApp(t, t.TempDir(), runner, &stdout, &stderr)
+	a.deps.RuntimeAssets = nil
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a.deps.Stdout = agentSnapshotWriter(func(p []byte) (int, error) {
+		cancel()
+		return stdout.Write(p)
+	})
+	code := a.Execute(ctx, cli.Request{Command: cli.CommandAgents, Agents: cli.AgentsRequest{Watch: true}})
+	if code != 0 || stdout.String() != "{\"schema_version\":1,\"agents\":[]}\n" || stderr.Len() != 0 {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+}
 
 func TestAgentsEmptyNeedsNeitherDockerConfigNorAssets(t *testing.T) {
 	root := t.TempDir()
@@ -32,7 +158,7 @@ func TestAgentsEmptyNeedsNeitherDockerConfigNorAssets(t *testing.T) {
 }
 
 func TestAgentsRequiresRunningOwnedMatchingRun(t *testing.T) {
-	for _, variant := range []string{"valid", "ready", "invalid", "unsupported", "stale", "foreign", "stopped", "missing", "error"} {
+	for _, variant := range []string{"valid", "ready", "invalid", "unsupported", "stale", "foreign", "stopped", "missing", "error", "watch error"} {
 		t.Run(variant, func(t *testing.T) {
 			root := t.TempDir()
 			runtimeRoot, err := lock.RuntimeRoot("", root, os.Getuid())
@@ -66,7 +192,7 @@ func TestAgentsRequiresRunningOwnedMatchingRun(t *testing.T) {
 				if len(c.Args) != 3 || c.Args[0] != "container" || c.Args[1] != "inspect" || c.Args[2] != "sandbox" {
 					t.Fatalf("unexpected process: %+v", c)
 				}
-				if variant == "error" {
+				if variant == "error" || variant == "watch error" {
 					return nil, nil, errors.New("daemon unavailable")
 				}
 				if variant == "missing" {
@@ -78,8 +204,8 @@ func TestAgentsRequiresRunningOwnedMatchingRun(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			a := newFixtureApp(t, root, runner, &stdout, &stderr)
 			a.deps.RuntimeAssets = nil
-			code := a.Execute(context.Background(), cli.Request{Command: cli.CommandAgents})
-			if variant == "error" {
+			code := a.Execute(context.Background(), cli.Request{Command: cli.CommandAgents, Agents: cli.AgentsRequest{Watch: variant == "watch error"}})
+			if variant == "error" || variant == "watch error" {
 				if code != 1 || stdout.Len() != 0 || stderr.Len() == 0 {
 					t.Fatalf("code=%d out=%s err=%s", code, &stdout, &stderr)
 				}

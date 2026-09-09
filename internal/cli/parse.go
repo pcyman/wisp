@@ -31,10 +31,15 @@ type Request struct {
 	ShowHelp bool
 
 	Run      RunRequest
+	Agents   AgentsRequest
 	Exec     ExecRequest
 	Hunk     HunkRequest
 	Config   ConfigRequest
 	AWSCheck AWSCheckRequest
+}
+
+type AgentsRequest struct {
+	Watch bool
 }
 
 type RunRequest struct {
@@ -99,10 +104,22 @@ func Parse(args []string) (Request, error) {
 		if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
 			return Request{Command: CommandAgents, ShowHelp: true}, nil
 		}
-		if len(args) != 2 || args[1] != "--json" {
-			return Request{}, syntaxf("agents requires --json and accepts no other arguments")
+		req := Request{Command: CommandAgents}
+		jsonSet := false
+		for _, arg := range args[1:] {
+			switch {
+			case arg == "--json" && !jsonSet:
+				jsonSet = true
+			case arg == "--watch" && !req.Agents.Watch:
+				req.Agents.Watch = true
+			default:
+				return Request{}, syntaxf("agents: unknown or duplicate argument %q", arg)
+			}
 		}
-		return Request{Command: CommandAgents}, nil
+		if !jsonSet {
+			return Request{}, syntaxf("agents requires --json")
+		}
+		return req, nil
 	case "run":
 		return parseRun(args[1:])
 	case "herdr":

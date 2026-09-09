@@ -5,7 +5,7 @@ const rootHelp = `Usage:
   wisp COMMAND [ARGUMENTS]
 
 Commands:
-  agents    List running Wisp agents as JSON
+  agents    List or watch running Wisp agents as JSON
   run       Launch OpenCode in the sandbox
   herdr     Launch OpenCode with Herdr integration
   exec      Execute a command in a running sandbox
@@ -21,9 +21,12 @@ Use "wisp help COMMAND" for command help.
 
 var commandHelp = map[Command]string{
 	CommandAgents: `Usage:
-  wisp agents --json
+  wisp agents --json [--watch]
 
 Lists verified running sandboxes. Reporter timestamps are advisory, not liveness.
+--json is required. --watch emits a full JSONL snapshot immediately, then only
+when changed, polling every second. Cancellation exits cleanly; collection or
+stdout errors exit nonzero. Each collection has a 10-second timeout.
 `,
 	CommandRun: `Usage:
   wisp [RUN_OPTIONS] [DIRECTORY]
