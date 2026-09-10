@@ -15,7 +15,8 @@ Wisp sandboxes, sorted by repository path and then run ID:
       "state": "waiting",
       "reason": "question",
       "reporter": "ready",
-      "updated_at": "2026-09-09T12:00:00Z"
+      "updated_at": "2026-09-09T12:00:00Z",
+      "host_process": { "pid": 12345 }
     }
   ]
 }
@@ -23,6 +24,15 @@ Wisp sandboxes, sorted by repository path and then run ID:
 
 `id` identifies a unique launch; `sandbox_id` is the stable sandbox container
 name for that project. An empty result is `{"schema_version":1,"agents":[]}`.
+
+`host_process.pid` is the host PID of the Wisp process that launched the sandbox,
+recorded at registration, not the PID of `wisp agents` or its watcher. Older
+registrations without a PID remain valid and omit `host_process`. The PID is
+advisory: processes can exit and PIDs can be reused. Consumers must validate that
+the PID still identifies the expected launching Wisp process before using it for
+process ancestry. It is not a liveness authority; running containers and verified
+ownership, project, and unique run-ID labels remain authoritative.
+
 The command requires `--json`, does not load project or user configuration, and
 does not materialize runtime assets. It does not contact Docker when there are
 no valid registry entries. Errors go to stderr with a nonzero exit status.

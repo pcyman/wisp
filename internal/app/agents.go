@@ -78,15 +78,19 @@ func (a *App) collectAgents(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	type hostProcess struct {
+		PID int `json:"pid"`
+	}
 	type agent struct {
-		ID        string `json:"id"`
-		SandboxID string `json:"sandbox_id"`
-		Repo      string `json:"repo"`
-		Agent     string `json:"agent"`
-		State     string `json:"state"`
-		Reason    string `json:"reason,omitempty"`
-		Reporter  string `json:"reporter"`
-		UpdatedAt string `json:"updated_at,omitempty"`
+		ID          string       `json:"id"`
+		SandboxID   string       `json:"sandbox_id"`
+		Repo        string       `json:"repo"`
+		Agent       string       `json:"agent"`
+		State       string       `json:"state"`
+		Reason      string       `json:"reason,omitempty"`
+		Reporter    string       `json:"reporter"`
+		UpdatedAt   string       `json:"updated_at,omitempty"`
+		HostProcess *hostProcess `json:"host_process,omitempty"`
 	}
 	output := struct {
 		SchemaVersion int     `json:"schema_version"`
@@ -105,11 +109,15 @@ func (a *App) collectAgents(ctx context.Context) ([]byte, error) {
 		if docker.VerifyLabels(container.Labels, labels) != nil {
 			continue
 		}
-		output.Agents = append(output.Agents, agent{
+		item := agent{
 			ID: entry.RunID, SandboxID: entry.SandboxName, Repo: entry.Repo, Agent: "opencode",
 			State: entry.Report.State, Reason: entry.Report.Reason,
 			Reporter: entry.Report.Reporter, UpdatedAt: entry.Report.UpdatedAt,
-		})
+		}
+		if entry.HostPID > 0 {
+			item.HostProcess = &hostProcess{PID: entry.HostPID}
+		}
+		output.Agents = append(output.Agents, item)
 	}
 	data, err := json.Marshal(output)
 	if err != nil {

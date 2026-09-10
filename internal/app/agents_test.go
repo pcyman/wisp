@@ -158,14 +158,19 @@ func TestAgentsEmptyNeedsNeitherDockerConfigNorAssets(t *testing.T) {
 }
 
 func TestAgentsRequiresRunningOwnedMatchingRun(t *testing.T) {
-	for _, variant := range []string{"valid", "ready", "invalid", "unsupported", "stale", "foreign", "stopped", "missing", "error", "watch error"} {
+	for _, variant := range []string{"valid", "legacy", "watch valid", "ready", "invalid", "unsupported", "stale", "foreign", "stopped", "missing", "error", "watch error"} {
 		t.Run(variant, func(t *testing.T) {
 			root := t.TempDir()
 			runtimeRoot, err := lock.RuntimeRoot("", root, os.Getuid())
 			if err != nil {
 				t.Fatal(err)
 			}
-			r, err := agentstatus.Register(runtimeRoot, agentstatus.Metadata{UID: os.Getuid(), Repo: "/repo", SandboxName: "sandbox", ProjectHash: strings.Repeat("a", 64), ComposeProject: "compose"})
+			// A stored launch PID distinct from this listing/watching process.
+			pid := os.Getpid() + 1000
+			if variant == "legacy" {
+				pid = 0
+			}
+			r, err := agentstatus.Register(runtimeRoot, agentstatus.Metadata{UID: os.Getuid(), HostPID: pid, Repo: "/repo", SandboxName: "sandbox", ProjectHash: strings.Repeat("a", 64), ComposeProject: "compose"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -204,7 +209,15 @@ func TestAgentsRequiresRunningOwnedMatchingRun(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			a := newFixtureApp(t, root, runner, &stdout, &stderr)
 			a.deps.RuntimeAssets = nil
-			code := a.Execute(context.Background(), cli.Request{Command: cli.CommandAgents, Agents: cli.AgentsRequest{Watch: variant == "watch error"}})
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if variant == "watch valid" {
+				a.deps.Stdout = agentSnapshotWriter(func(p []byte) (int, error) {
+					cancel()
+					return stdout.Write(p)
+				})
+			}
+			code := a.Execute(ctx, cli.Request{Command: cli.CommandAgents, Agents: cli.AgentsRequest{Watch: strings.HasPrefix(variant, "watch ")}})
 			if variant == "error" || variant == "watch error" {
 				if code != 1 || stdout.Len() != 0 || stderr.Len() == 0 {
 					t.Fatalf("code=%d out=%s err=%s", code, &stdout, &stderr)
@@ -221,12 +234,15 @@ func TestAgentsRequiresRunningOwnedMatchingRun(t *testing.T) {
 			if output.SchemaVersion != 1 {
 				t.Fatalf("output=%s", &stdout)
 			}
-			if variant == "valid" || variant == "ready" || variant == "invalid" || variant == "unsupported" {
+			if variant == "valid" || variant == "legacy" || variant == "watch valid" || variant == "ready" || variant == "invalid" || variant == "unsupported" {
 				want := map[string]any{
 					"id": r.RunID, "sandbox_id": r.SandboxName, "repo": r.Repo,
 					"agent": "opencode", "state": "unknown", "reporter": variant,
 				}
-				if variant == "valid" {
+				if pid > 0 {
+					want["host_process"] = map[string]any{"pid": float64(pid)}
+				}
+				if variant == "valid" || variant == "legacy" || variant == "watch valid" {
 					want["reporter"] = "missing"
 				}
 				if variant == "ready" {
@@ -260,7 +276,7 @@ func TestRunRegistrationLifecycle(t *testing.T) {
 			t.Fatalf("entries=%+v err=%v", entries, err)
 		}
 		entry := entries[0]
-		if entry.RunID != testEnvironmentValue(c.Env, "WISP_RUN_ID") || entry.Repo != projectDir {
+		if entry.RunID != testEnvironmentValue(c.Env, "WISP_RUN_ID") || entry.Repo != projectDir || entry.HostPID != os.Getpid() {
 			t.Fatalf("entry=%+v", entry)
 		}
 		if _, err := os.Stat(filepath.Join(runtimeRoot, "agents", entry.RunID, "status")); err != nil {

@@ -1,6 +1,7 @@
 package agentstatus
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,39 @@ import (
 
 	"golang.org/x/sys/unix"
 )
+
+func TestRegistryMetadataRoundTrip(t *testing.T) {
+	for _, pid := range []int{0, 12345} {
+		root := t.TempDir()
+		if err := os.Chmod(root, 0700); err != nil {
+			t.Fatal(err)
+		}
+		r, err := Register(root, Metadata{UID: os.Getuid(), HostPID: pid, Repo: "/repo", SandboxName: "sandbox", ProjectHash: strings.Repeat("a", 64), ComposeProject: "compose"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Cleanup()
+		data, err := os.ReadFile(filepath.Join(r.dir, "metadata.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var stored map[string]any
+		if err := json.Unmarshal(data, &stored); err != nil {
+			t.Fatal(err)
+		}
+		if pid == 0 {
+			if _, ok := stored["host_pid"]; ok {
+				t.Fatal("legacy registration should omit host_pid")
+			}
+		} else if stored["host_pid"] != float64(pid) {
+			t.Fatalf("metadata=%s", data)
+		}
+		entries, err := List(root, os.Getuid())
+		if err != nil || len(entries) != 1 || entries[0].Metadata != r.Metadata {
+			t.Fatalf("entries=%+v registration=%+v err=%v", entries, r.Metadata, err)
+		}
+	}
+}
 
 func TestRegistryReports(t *testing.T) {
 	root := t.TempDir()

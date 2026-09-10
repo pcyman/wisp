@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 
 	"wisp/internal/agentstatus"
@@ -51,6 +52,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 	registration, err := agentstatus.Register(runtimeRoot, agentstatus.Metadata{
 		Repo: plan.Project.RootDir, SandboxName: plan.Project.ContainerName,
 		ProjectHash: plan.Project.Hash, ComposeProject: plan.Project.ComposeProject, UID: plan.UID,
+		HostPID: os.Getpid(),
 	})
 	if err != nil {
 		return 1, fmt.Errorf("register agent: %w", err)
