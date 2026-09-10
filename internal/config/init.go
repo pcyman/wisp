@@ -23,6 +23,8 @@ aws_cli = ""
 kubectl = ""
 helm = ""
 terraform = ""
+yq = ""
+uv = ""
 go = ""
 boto3 = "1.35.99"
 

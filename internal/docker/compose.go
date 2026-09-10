@@ -17,7 +17,8 @@ var privateEnvironment = map[string]struct{}{
 	"WISP_GID": {}, "WISP_AWS_ALIAS": {}, "WISP_AWS_AUTHORIZATION_TOKEN": {},
 	"WISP_PROJECT_HASH": {}, "WISP_CLI_VERSION": {}, "OPENCODE_VERSION": {},
 	"HUNK_VERSION": {}, "AWS_CLI_VERSION": {}, "KUBECTL_VERSION": {},
-	"HELM_VERSION": {}, "TERRAFORM_VERSION": {}, "GO_VERSION": {},
+	"HELM_VERSION": {}, "TERRAFORM_VERSION": {}, "YQ_VERSION": {}, "UV_VERSION": {},
+	"GO_VERSION":    {},
 	"BOTO3_VERSION": {},
 }
 

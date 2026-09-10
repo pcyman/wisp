@@ -64,6 +64,8 @@ func Resolve(raw RawConfig) (Config, error) {
 			setString(&cfg.Build.Versions.Kubectl, versions.Kubectl)
 			setString(&cfg.Build.Versions.Helm, versions.Helm)
 			setString(&cfg.Build.Versions.Terraform, versions.Terraform)
+			setString(&cfg.Build.Versions.YQ, versions.YQ)
+			setString(&cfg.Build.Versions.UV, versions.UV)
 			setString(&cfg.Build.Versions.Go, versions.Go)
 			setString(&cfg.Build.Versions.Boto3, versions.Boto3)
 		}

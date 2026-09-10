@@ -7,6 +7,8 @@ ARG AWS_CLI_VERSION=""
 ARG KUBECTL_VERSION=""
 ARG HELM_VERSION=""
 ARG TERRAFORM_VERSION=""
+ARG YQ_VERSION=""
+ARG UV_VERSION=""
 ARG GO_VERSION=""
 
 RUN apt-get update \
@@ -111,6 +113,40 @@ RUN set -eux; \
     unzip -q "/tmp/${archive}" -d /tmp/terraform; \
     install -m 0755 /tmp/terraform/terraform /usr/local/bin/terraform; \
     rm -rf "/tmp/${archive}" /tmp/terraform /tmp/terraform_SHA256SUMS
+
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+        amd64|arm64) arch="${TARGETARCH}" ;; \
+        *) echo "Unsupported architecture for yq: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    version="${YQ_VERSION}"; \
+    if [ -z "${version}" ]; then \
+        url="https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${arch}"; \
+    else \
+        case "${version}" in v*) ;; *) version="v${version}" ;; esac; \
+        url="https://github.com/mikefarah/yq/releases/download/${version}/yq_linux_${arch}"; \
+    fi; \
+    curl -fsSLo /tmp/yq "${url}"; \
+    install -m 0755 /tmp/yq /usr/local/bin/yq; \
+    rm /tmp/yq
+
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+        amd64) target="x86_64-unknown-linux-gnu" ;; \
+        arm64) target="aarch64-unknown-linux-gnu" ;; \
+        *) echo "Unsupported architecture for uv: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    version="${UV_VERSION}"; \
+    if [ -z "${version}" ]; then \
+        url="https://github.com/astral-sh/uv/releases/latest/download/uv-${target}.tar.gz"; \
+    else \
+        case "${version}" in v*) ;; *) version="v${version}" ;; esac; \
+        url="https://github.com/astral-sh/uv/releases/download/${version}/uv-${target}.tar.gz"; \
+    fi; \
+    curl -fsSLo /tmp/uv.tar.gz "${url}"; \
+    tar -xzf /tmp/uv.tar.gz -C /tmp; \
+    install -m 0755 "/tmp/uv-${target}/uv" "/tmp/uv-${target}/uvx" /usr/local/bin/; \
+    rm -rf /tmp/uv.tar.gz "/tmp/uv-${target}"
 
 RUN set -eux; \
     case "${TARGETARCH}" in \

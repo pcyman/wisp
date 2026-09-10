@@ -37,6 +37,8 @@ type RawVersionConfig struct {
 	Kubectl   *string `toml:"kubectl"`
 	Helm      *string `toml:"helm"`
 	Terraform *string `toml:"terraform"`
+	YQ        *string `toml:"yq"`
+	UV        *string `toml:"uv"`
 	Go        *string `toml:"go"`
 	Boto3     *string `toml:"boto3"`
 }
@@ -96,6 +98,8 @@ type VersionConfig struct {
 	Kubectl   string
 	Helm      string
 	Terraform string
+	YQ        string
+	UV        string
 	Go        string
 	Boto3     string
 }

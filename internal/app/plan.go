@@ -239,6 +239,8 @@ func plannedEnvironment(options PlanOptions, cfg config.Config, alias, projectHa
 		"KUBECTL_VERSION":        versions.Kubectl,
 		"HELM_VERSION":           versions.Helm,
 		"TERRAFORM_VERSION":      versions.Terraform,
+		"YQ_VERSION":             versions.YQ,
+		"UV_VERSION":             versions.UV,
 		"GO_VERSION":             versions.Go,
 		"BOTO3_VERSION":          versions.Boto3,
 	}

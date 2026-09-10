@@ -56,6 +56,8 @@ services:
         KUBECTL_VERSION: ${KUBECTL_VERSION:-}
         HELM_VERSION: ${HELM_VERSION:-}
         TERRAFORM_VERSION: ${TERRAFORM_VERSION:-}
+        YQ_VERSION: ${YQ_VERSION:-}
+        UV_VERSION: ${UV_VERSION:-}
         GO_VERSION: ${GO_VERSION:-}
     environment:
       HOME: /home/sandbox

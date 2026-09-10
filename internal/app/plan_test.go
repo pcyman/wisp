@@ -62,6 +62,8 @@ func privateProcessEnvironment(value string) []string {
 		"KUBECTL_VERSION=" + value,
 		"HELM_VERSION=" + value,
 		"TERRAFORM_VERSION=" + value,
+		"YQ_VERSION=" + value,
+		"UV_VERSION=" + value,
 		"GO_VERSION=" + value,
 		"BOTO3_VERSION=" + value,
 	}
@@ -104,6 +106,8 @@ credentials = "credentials:test"
 cpus = 3
 [build.versions]
 opencode = "1.2.3"
+yq = "4.47.2"
+uv = "0.8.15"
 boto3 = "1.35.99"
 [aws]
 default = "dev"
@@ -178,7 +182,7 @@ mode = "rw"
 	for key, want := range map[string]string{
 		"WISP_IMAGE": "sandbox:test", "WISP_CREDENTIALS_IMAGE": "credentials:test",
 		"WISP_AWS_ALIAS": "dev", "WISP_CLI_VERSION": "test-version",
-		"OPENCODE_VERSION": "1.2.3", "BOTO3_VERSION": "1.35.99",
+		"OPENCODE_VERSION": "1.2.3", "YQ_VERSION": "4.47.2", "UV_VERSION": "0.8.15", "BOTO3_VERSION": "1.35.99",
 		"TERM": "xterm-256color", "COLORTERM": "truecolor",
 	} {
 		if plan.Environment[key] != want {
