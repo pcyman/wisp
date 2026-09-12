@@ -40,19 +40,21 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 			status, resultErr = cleanupResult(status, resultErr, fmt.Errorf("release project lock: %w", closeErr), a.deps.Stderr)
 		}
 	}()
-	openCodeDataMount, err := prepareOpenCodeDataMount(plan.OpenCodeDataRoot, plan.Project.Hash, plan.UID)
+	agentDataMounts, err := prepareAgentDataMounts(plan.AgentDataRoot, plan.Project.Hash, plan.UID, plan.AgentKey, plan.SharedPiProfile)
 	if err != nil {
 		return 1, err
 	}
-	// Put the data directory before the read-only auth-file overlay nested
-	// beneath it. The project mount is always the first planned mount.
-	sandboxMounts := make([]docker.Mount, 0, len(plan.Mounts)+1)
-	sandboxMounts = append(sandboxMounts, plan.Mounts[0], openCodeDataMount)
-	sandboxMounts = append(sandboxMounts, plan.Mounts[1:]...)
+	if plan.AgentDataMountIndex < 0 || plan.AgentDataMountIndex > len(plan.Mounts) {
+		return 1, fmt.Errorf("invalid agent data mount index")
+	}
+	sandboxMounts := make([]docker.Mount, 0, len(plan.Mounts)+len(agentDataMounts))
+	sandboxMounts = append(sandboxMounts, plan.Mounts[:plan.AgentDataMountIndex]...)
+	sandboxMounts = append(sandboxMounts, agentDataMounts...)
+	sandboxMounts = append(sandboxMounts, plan.Mounts[plan.AgentDataMountIndex:]...)
 	registration, err := agentstatus.Register(runtimeRoot, agentstatus.Metadata{
 		Repo: plan.Project.RootDir, SandboxName: plan.Project.ContainerName,
 		ProjectHash: plan.Project.Hash, ComposeProject: plan.Project.ComposeProject, UID: plan.UID,
-		HostPID: os.Getpid(),
+		HostPID: os.Getpid(), Agent: plan.AgentKey,
 	})
 	if err != nil {
 		return 1, fmt.Errorf("register agent: %w", err)
@@ -154,7 +156,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 		}
 	}
 
-	fmt.Fprintln(a.deps.Stderr, "Starting OpenCode...")
+	fmt.Fprintf(a.deps.Stderr, "Starting %s...\n", plan.AgentName)
 	composeStarted = true
 	args := []string{"run", "--rm", "--name", plan.Project.ContainerName, "--user", fmt.Sprintf("%d:%d", plan.UID, plan.GID), "--workdir", plan.Project.Workdir(), "--no-deps"}
 	if !a.deps.IsTerminal(a.deps.Stdin, a.deps.Stdout) {

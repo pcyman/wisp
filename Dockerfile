@@ -2,6 +2,7 @@ FROM debian:bookworm-slim
 
 ARG TARGETARCH
 ARG OPENCODE_VERSION=""
+ARG PI_VERSION="0.85.1"
 ARG HUNK_VERSION=""
 ARG AWS_CLI_VERSION=""
 ARG KUBECTL_VERSION=""
@@ -21,13 +22,33 @@ RUN apt-get update \
         gzip \
         jq \
         libc6-dev \
-        nodejs \
-        npm \
         python3 \
         python-is-python3 \
         ripgrep \
         unzip \
+        xz-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# Pi requires Node >=22.19. Install the official architecture-specific runtime
+# and verify it against Node's published checksums.
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+        amd64) node_arch="x64" ;; \
+        arm64) node_arch="arm64" ;; \
+        *) echo "Unsupported architecture for Node: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    node_version="22.19.0"; \
+    archive="node-v${node_version}-linux-${node_arch}.tar.xz"; \
+    base_url="https://nodejs.org/dist/v${node_version}"; \
+    curl -fsSLo "/tmp/${archive}" "${base_url}/${archive}"; \
+    curl -fsSLo /tmp/node-SHASUMS256.txt "${base_url}/SHASUMS256.txt"; \
+    checksum="$(awk -v archive="${archive}" '$2 == archive { print $1 }' /tmp/node-SHASUMS256.txt)"; \
+    test -n "${checksum}"; \
+    echo "${checksum}  /tmp/${archive}" | sha256sum --check; \
+    tar -xJf "/tmp/${archive}" -C /usr/local --strip-components=1; \
+    rm "/tmp/${archive}" /tmp/node-SHASUMS256.txt; \
+    node --version; \
+    npm --version
 
 # OpenCode's official installer selects the correct standalone binary for the
 # build architecture. Pin it with --build-arg OPENCODE_VERSION=x.y.z if needed.
@@ -40,6 +61,13 @@ RUN set -eux; \
     fi; \
     install -m 0755 /tmp/opencode-home/.opencode/bin/opencode /usr/local/bin/opencode; \
     rm -rf /tmp/install-opencode /tmp/opencode-home
+
+RUN set -eux; \
+    test -n "${PI_VERSION}"; \
+    npm install --global --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}"; \
+    HOME=/tmp/pi-home PI_SKIP_VERSION_CHECK=1 pi --version; \
+    rm -rf /tmp/pi-home; \
+    npm cache clean --force
 
 RUN set -eux; \
     if [ -n "${HUNK_VERSION}" ]; then \
@@ -179,6 +207,7 @@ RUN groupadd --gid 1000 sandbox \
 COPY --chmod=0755 container/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN install -d -m 0755 /usr/local/share/wisp
 COPY --chmod=0644 container/agent-status.js /usr/local/share/wisp/agent-status.js
+COPY --chmod=0644 container/pi-agent-status.mjs /usr/local/share/wisp/pi-agent-status.mjs
 COPY --chmod=0644 container/opencode.json /usr/local/share/wisp/opencode.json
 # Ensure COPY cannot leave the plugin directory inaccessible to the runtime UID.
 RUN chmod 0755 /usr/local/share/wisp
@@ -191,6 +220,7 @@ ENV HOME=/home/sandbox \
 
 USER sandbox
 RUN test -r /usr/local/share/wisp/agent-status.js
+RUN test -r /usr/local/share/wisp/pi-agent-status.mjs
 RUN test -r /usr/local/share/wisp/opencode.json
 WORKDIR /workspace/current
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

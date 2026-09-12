@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -128,7 +129,7 @@ func TestRunWithoutAWSDoesNotStartBrokerOrGenerateToken(t *testing.T) {
 			return err
 		}
 		volumes := override.Services["sandbox"].Volumes
-		if len(volumes) != 3 || volumes[1].Target != "/run/wisp/opencode/data/opencode" || volumes[1].ReadOnly {
+		if len(volumes) != 3 || volumes[1].Target != "/run/wisp/agent/data/opencode" || volumes[1].ReadOnly {
 			return fmt.Errorf("sandbox volumes do not include writable OpenCode data: %s", contents)
 		}
 		return nil
@@ -137,6 +138,74 @@ func TestRunWithoutAWSDoesNotStartBrokerOrGenerateToken(t *testing.T) {
 	status := application.Execute(context.Background(), cli.Request{Command: cli.CommandRun, Run: cli.RunRequest{Directory: projectDir, ConfigPath: configPath}})
 	if status != 0 || fake.upCount != 0 || randomReads != 0 || strings.Contains(stderr.String(), "credential broker") {
 		t.Fatalf("status=%d broker starts=%d random reads=%d stderr=%q", status, fake.upCount, randomReads, stderr.String())
+	}
+}
+
+func TestRunPiMountsSharedProfileAndProjectState(t *testing.T) {
+	root, configPath, projectDir := applicationFixture(t)
+	home := filepath.Join(root, "home")
+	piProfile := filepath.Join(home, ".pi", "agent")
+	if err := os.MkdirAll(piProfile, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	contents := "schema_version = 1\n[agent]\ndefault = \"pi\"\n"
+	if err := os.WriteFile(configPath, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fake := &lifecycleFake{}
+	application := newFixtureApp(t, root, fake.runner(t), &bytes.Buffer{}, &bytes.Buffer{})
+	fake.attachedError = func(command process.Command) error {
+		runIndex := indexSlice(command.Args, []string{"run", "--rm"})
+		if runIndex < 2 {
+			return fmt.Errorf("run invocation not found: %v", command.Args)
+		}
+		data, err := os.ReadFile(command.Args[runIndex-1])
+		if err != nil {
+			return err
+		}
+		var override struct {
+			Services map[string]struct {
+				Command []string `json:"command"`
+				Volumes []struct {
+					Source   string `json:"source"`
+					Target   string `json:"target"`
+					ReadOnly bool   `json:"read_only"`
+				} `json:"volumes"`
+			} `json:"services"`
+		}
+		if err := json.Unmarshal(data, &override); err != nil {
+			return err
+		}
+		sandbox := override.Services["sandbox"]
+		if !reflect.DeepEqual(sandbox.Command, []string{"pi", "-e", "/usr/local/share/wisp/pi-agent-status.mjs"}) {
+			return fmt.Errorf("Pi command = %#v", sandbox.Command)
+		}
+		wantTargets := []string{"/workspace/current", "/run/wisp/pi/agent", "/run/wisp/pi/sessions", "/run/wisp/pi/agent/trust.json", "/run/wisp/agent/data", "/run/wisp/agent-status"}
+		if len(sandbox.Volumes) != len(wantTargets) {
+			return fmt.Errorf("Pi volumes = %s", data)
+		}
+		for i, target := range wantTargets {
+			if sandbox.Volumes[i].Target != target || sandbox.Volumes[i].ReadOnly {
+				return fmt.Errorf("Pi volume %d = %#v", i, sandbox.Volumes[i])
+			}
+		}
+		metadataPath := filepath.Join(filepath.Dir(sandbox.Volumes[len(sandbox.Volumes)-1].Source), "metadata.json")
+		metadata, err := os.ReadFile(metadataPath)
+		if err != nil {
+			return err
+		}
+		var registered struct {
+			Agent string `json:"agent"`
+		}
+		if err := json.Unmarshal(metadata, &registered); err != nil || registered.Agent != "pi" {
+			return fmt.Errorf("registered agent = %q, %v", registered.Agent, err)
+		}
+		return nil
+	}
+
+	status := application.Execute(context.Background(), cli.Request{Command: cli.CommandRun, Run: cli.RunRequest{Directory: projectDir, ConfigPath: configPath}})
+	if status != 0 {
+		t.Fatalf("status = %d", status)
 	}
 }
 

@@ -6,6 +6,7 @@ const (
 	DefaultCredentialsImage = "wisp-credentials:local"
 	DefaultBuildCPUs        = 4
 	DefaultBoto3Version     = "1.35.99"
+	DefaultPiVersion        = "0.85.1"
 	DefaultAWSDuration      = 3600
 	InitReminder            = "AWS access is disabled until an [aws] table and alias are configured"
 )
@@ -15,7 +16,9 @@ type RawConfig struct {
 	SchemaVersion *int               `toml:"schema_version"`
 	Images        *RawImageConfig    `toml:"images"`
 	Build         *RawBuildConfig    `toml:"build"`
+	Agent         *RawAgentConfig    `toml:"agent"`
 	OpenCode      *RawOpenCodeConfig `toml:"opencode"`
+	Pi            *RawPiConfig       `toml:"pi"`
 	AWS           *RawAWSConfig      `toml:"aws"`
 	Mounts        []RawMountConfig   `toml:"mounts"`
 }
@@ -32,6 +35,7 @@ type RawBuildConfig struct {
 
 type RawVersionConfig struct {
 	OpenCode  *string `toml:"opencode"`
+	Pi        *string `toml:"pi"`
 	Hunk      *string `toml:"hunk"`
 	AWSCLI    *string `toml:"aws_cli"`
 	Kubectl   *string `toml:"kubectl"`
@@ -43,7 +47,15 @@ type RawVersionConfig struct {
 	Boto3     *string `toml:"boto3"`
 }
 
+type RawAgentConfig struct {
+	Default *string `toml:"default"`
+}
+
 type RawOpenCodeConfig struct {
+	ConfigPath *string `toml:"config_path"`
+}
+
+type RawPiConfig struct {
 	ConfigPath *string `toml:"config_path"`
 }
 
@@ -75,7 +87,9 @@ type Config struct {
 	SchemaVersion int
 	Images        ImageConfig
 	Build         BuildConfig
+	Agent         AgentConfig
 	OpenCode      OpenCodeConfig
+	Pi            PiConfig
 	Hunk          HunkConfig
 	AWS           AWSConfig
 	Mounts        []MountConfig
@@ -93,6 +107,7 @@ type BuildConfig struct {
 
 type VersionConfig struct {
 	OpenCode  string
+	Pi        string
 	Hunk      string
 	AWSCLI    string
 	Kubectl   string
@@ -104,10 +119,19 @@ type VersionConfig struct {
 	Boto3     string
 }
 
+type AgentConfig struct {
+	Default string
+}
+
 type OpenCodeConfig struct {
 	ConfigPath         string
 	ConfigPathExplicit bool
 	AuthPath           string
+}
+
+type PiConfig struct {
+	ConfigPath         string
+	ConfigPathExplicit bool
 }
 
 type HunkConfig struct {
@@ -155,8 +179,9 @@ func (w Warning) String() string { return string(w) }
 
 // Result retains the exact validated bytes for immutable run planning.
 type Result struct {
-	Path     string
-	Snapshot []byte
-	Config   Config
-	Warnings []Warning
+	Path          string
+	Snapshot      []byte
+	Config        Config
+	SelectedAgent string
+	Warnings      []Warning
 }

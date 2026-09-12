@@ -1,8 +1,9 @@
 # Wisp
 
-Wisp runs [OpenCode](https://opencode.ai/) in a small Docker sandbox for the
-current project. The project is mounted read-write, while the container home is
-ephemeral except for project-scoped OpenCode session data. AWS access is opt-in
+Wisp runs [OpenCode](https://opencode.ai/) or the
+[Pi agent harness](https://pi.dev/) in a small Docker sandbox for the current
+project. The project is mounted read-write, while agent state is mounted only
+where needed. AWS access is opt-in
 and, when configured, is supplied through a separate credential broker that
 assumes a configured role.
 
@@ -63,10 +64,24 @@ aws sso login --profile company-development
 wisp aws check development
 ```
 
-Launch OpenCode for the current directory:
+Launch the configured agent (OpenCode by default) for the current directory:
 
 ```sh
 wisp
+```
+
+Select Pi for one run, or make it the default:
+
+```sh
+wisp --agent pi
+```
+
+```toml
+[agent]
+default = "pi"
+
+[pi]
+# config_path = "~/.pi/agent"
 ```
 
 Launch Wisp inside [Herdr](https://herdr.dev/):
@@ -75,8 +90,9 @@ Launch Wisp inside [Herdr](https://herdr.dev/):
 wisp herdr
 ```
 
-This launches the normal OpenCode sandbox while identifying the host-side Wisp
-process to Herdr as an OpenCode agent. Herdr itself is not exposed inside the
+This always launches the OpenCode sandbox, regardless of the configured agent,
+while identifying the host-side Wisp process to Herdr as an OpenCode agent.
+Herdr itself is not exposed inside the
 sandbox. The `herdr` command name is reserved; use `wisp ./herdr` or
 `wisp run herdr` to launch a directory named `herdr`.
 
@@ -88,10 +104,20 @@ mounted read-only when present. Wisp also mounts only the host Hunk
 data is persisted separately for each project under
 `$XDG_DATA_HOME/wisp/projects`, falling back to `$HOME/.local/share/wisp/projects`.
 
+For Pi, Wisp mounts the host `$HOME/.pi/agent` directory read-write when it
+exists (or the configured `pi.config_path`). This intentionally shares Pi
+credentials, settings, extensions, skills, packages, and caches. Changes made
+inside the sandbox persist to that profile and can affect later Pi runs, so keep
+the profile under source control or otherwise review it as appropriate. Pi
+sessions and trust decisions remain Wisp-managed and project-scoped, avoiding
+collisions caused by every sandbox project appearing internally under the same
+workspace path. When no host Pi profile exists, Wisp uses project-local Pi
+state instead.
+
 ## Usage
 
 ```text
-wisp [RUN_OPTIONS] [DIRECTORY]   Launch OpenCode
+wisp [RUN_OPTIONS] [DIRECTORY]   Launch the selected agent
 wisp herdr [RUN_OPTIONS] [DIRECTORY]
 wisp exec [DIRECTORY] -- COMMAND
 wisp hunk [DIRECTORY] [-- ARGS]
@@ -103,6 +129,7 @@ wisp doctor
 Common run options:
 
 ```text
+--agent NAME     Select opencode or pi
 --aws ALIAS       Select an AWS alias
 --rebuild         Rebuild runtime images
 --mount DIR       Add a read-only repository mount

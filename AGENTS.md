@@ -23,8 +23,8 @@ CLI rather than an SDK.
 
 - Validate and resolve all host input before Docker side effects.
 - Pass subprocess arguments directly; never construct shell command strings.
-- OpenCode is the only agent. Run arguments must never become OpenCode
-  arguments or user-selected container commands.
+- OpenCode and Pi are the supported agents. Run arguments must never become
+  agent arguments or user-selected container commands.
 - Never mount the Docker socket, the whole host home, or host AWS files into
   the sandbox. OpenCode config and auth mounts stay read-only.
 - AWS config and SSO data are broker-only. Never log credentials, broker tokens,
@@ -36,7 +36,7 @@ CLI rather than an SDK.
   Compose resources on normal and interrupted exits.
 - Keep help, version, config commands, `exec`, and `hunk` independent of runtime
   asset materialization where applicable.
-- Do not add legacy environment configuration, project-local configuration,
+- Do not add legacy environment configuration, project-local Wisp configuration,
   direct/no-AWS modes, Codex support, or remote-Docker assumptions.
 
 Runtime assets are embedded into the Go binary. Rebuild the binary after asset
@@ -69,6 +69,7 @@ go vet ./...
 go build ./cmd/wisp
 python -m unittest discover -s credentials -p 'test_*.py'
 node --test container/agent-status.test.mjs
+node --test container/pi-agent-status.test.mjs
 bash -n container/entrypoint.sh
 git diff --check
 ```

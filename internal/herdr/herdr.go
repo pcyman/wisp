@@ -33,6 +33,37 @@ func BuildPlan(argv, env []string) (Plan, error) {
 	}
 	plan.Argv = append(plan.Argv, argv[0])
 	plan.Argv = append(plan.Argv, argv[2:]...)
+	hasAgent := false
+	for i := 1; i < len(plan.Argv); i++ {
+		arg := plan.Argv[i]
+		if arg == "--" {
+			break
+		}
+		if arg == "--agent" {
+			if i+1 >= len(plan.Argv) || plan.Argv[i+1] != AgentOpenCode {
+				return Plan{}, fmt.Errorf("herdr only supports the %s agent", AgentOpenCode)
+			}
+			hasAgent = true
+			i++
+		} else if strings.HasPrefix(arg, "--agent=") {
+			if strings.TrimPrefix(arg, "--agent=") != AgentOpenCode {
+				return Plan{}, fmt.Errorf("herdr only supports the %s agent", AgentOpenCode)
+			}
+			hasAgent = true
+		}
+	}
+	if !hasAgent {
+		insert := len(plan.Argv)
+		for i, arg := range plan.Argv[1:] {
+			if arg == "--" {
+				insert = i + 1
+				break
+			}
+		}
+		plan.Argv = append(plan.Argv, "")
+		copy(plan.Argv[insert+1:], plan.Argv[insert:])
+		plan.Argv[insert] = "--agent=" + AgentOpenCode
+	}
 
 	prefix := agentVariable + "="
 	count := 0

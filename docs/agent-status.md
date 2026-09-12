@@ -51,7 +51,7 @@ fabricated empty snapshot. Stdout write failures also exit nonzero. Watch exits
 cleanly on context cancellation (including an interrupt), without a final
 snapshot. Watch has the same configuration and asset independence as one-shot.
 
-States are advisory summaries of observed OpenCode events, not process health:
+States are advisory summaries of observed agent events, not process health:
 
 - `idle`: no observed active work or pending input; also used after cancellation
   or when no terminal outcome can be established.
@@ -80,7 +80,10 @@ The host-only registry is under Wisp's private runtime root, normally
 `$XDG_RUNTIME_DIR/wisp/agents/<run-id>` or the private `wisp-<uid>` directory in
 the temporary directory. `metadata.json` stays on the host; only `status/` is
 mounted read-write at `/run/wisp/agent-status`, where the plugin writes
-`agent.json`. Host OpenCode configuration and authentication remain read-only.
+`agent.json`. The trusted host registration records whether the harness is
+`opencode` or `pi`; reports cannot choose or change that identity. Host OpenCode
+configuration and authentication remain read-only. A selected Pi profile is
+shared read-write, while its sessions and trust state are project-scoped.
 Normal and interrupted cleanup removes the registration. Files left after an
 abrupt exit do not establish liveness: listing requires a running Docker
 container with matching ownership, project, and unique run-ID labels. Stale
@@ -90,6 +93,12 @@ The static `container/opencode.json` is loaded via `OPENCODE_CONFIG` and referen
 the image's JavaScript plugin at `file:///usr/local/share/wisp/agent-status.js`.
 Wisp does not use `OPENCODE_CONFIG_DIR`, avoiding an extra dependency install on
 each start.
+
+Pi loads `/usr/local/share/wisp/pi-agent-status.mjs` as an explicit CLI
+extension. It reports `working` from `agent_start`, returns to `idle` only at
+`agent_settled`, and reports extension UI prompts as `waiting`. Pi's public
+extension API does not expose exact retry state or a conservative terminal
+success/failure signal, so the Pi reporter does not manufacture those states.
 
 Runtime assets, including the reporter plugin, are embedded in the Wisp binary.
 After updating them, rebuild the binary using the

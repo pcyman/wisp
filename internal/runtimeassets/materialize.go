@@ -32,6 +32,7 @@ var requiredAssets = []assetSpec{
 	{name: "container/agent-status.js", mode: 0o644},
 	{name: "container/entrypoint.sh", mode: 0o755},
 	{name: "container/opencode.json", mode: 0o644},
+	{name: "container/pi-agent-status.mjs", mode: 0o644},
 	{name: "credentials/.dockerignore", mode: 0o644},
 	{name: "credentials/Dockerfile", mode: 0o644},
 	{name: "credentials/broker.py", mode: 0o644},

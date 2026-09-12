@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/sys/unix"
+
 	"wisp/internal/hostpath"
 	"wisp/internal/mountpolicy"
 )
@@ -37,9 +39,10 @@ func Resolve(raw RawConfig) (Config, error) {
 		},
 		Build: BuildConfig{
 			CPUs:     DefaultBuildCPUs,
-			Versions: VersionConfig{Boto3: DefaultBoto3Version},
+			Versions: VersionConfig{Pi: DefaultPiVersion, Boto3: DefaultBoto3Version},
 		},
-		AWS: AWSConfig{Aliases: make(map[string]AWSAliasConfig)},
+		Agent: AgentConfig{Default: "opencode"},
+		AWS:   AWSConfig{Aliases: make(map[string]AWSAliasConfig)},
 	}
 	if raw.Images != nil {
 		setString(&cfg.Images.Sandbox, raw.Images.Sandbox)
@@ -59,6 +62,7 @@ func Resolve(raw RawConfig) (Config, error) {
 		if raw.Build.Versions != nil {
 			versions := raw.Build.Versions
 			setString(&cfg.Build.Versions.OpenCode, versions.OpenCode)
+			setString(&cfg.Build.Versions.Pi, versions.Pi)
 			setString(&cfg.Build.Versions.Hunk, versions.Hunk)
 			setString(&cfg.Build.Versions.AWSCLI, versions.AWSCLI)
 			setString(&cfg.Build.Versions.Kubectl, versions.Kubectl)
@@ -76,6 +80,16 @@ func Resolve(raw RawConfig) (Config, error) {
 	if strings.TrimSpace(cfg.Build.Versions.Boto3) == "" {
 		return Config{}, errors.New("build.versions.boto3 must not be empty")
 	}
+	if strings.TrimSpace(cfg.Build.Versions.Pi) == "" {
+		return Config{}, errors.New("build.versions.pi must not be empty")
+	}
+
+	if raw.Agent != nil && raw.Agent.Default != nil {
+		cfg.Agent.Default = strings.ToLower(strings.TrimSpace(*raw.Agent.Default))
+	}
+	if cfg.Agent.Default != "opencode" && cfg.Agent.Default != "pi" {
+		return Config{}, fmt.Errorf("agent.default must be %q or %q", "opencode", "pi")
+	}
 
 	if raw.OpenCode != nil && raw.OpenCode.ConfigPath != nil {
 		if *raw.OpenCode.ConfigPath == "" {
@@ -83,6 +97,13 @@ func Resolve(raw RawConfig) (Config, error) {
 		}
 		cfg.OpenCode.ConfigPath = *raw.OpenCode.ConfigPath
 		cfg.OpenCode.ConfigPathExplicit = true
+	}
+	if raw.Pi != nil && raw.Pi.ConfigPath != nil {
+		if *raw.Pi.ConfigPath == "" {
+			return Config{}, errors.New("pi.config_path must not be empty when set")
+		}
+		cfg.Pi.ConfigPath = *raw.Pi.ConfigPath
+		cfg.Pi.ConfigPathExplicit = true
 	}
 
 	if raw.AWS != nil {
@@ -246,9 +267,30 @@ func SelectAWSAlias(cfg Config, requested string) (string, error) {
 	return "", errors.New("multiple AWS aliases are configured; configure aws.default or pass --aws ALIAS")
 }
 
+// SelectAgent applies requested then configured-default precedence.
+func SelectAgent(cfg Config, requested string) (string, error) {
+	name := strings.ToLower(strings.TrimSpace(requested))
+	if name == "" {
+		name = cfg.Agent.Default
+	}
+	if name != "opencode" && name != "pi" {
+		return "", fmt.Errorf("unknown agent %q (expected opencode or pi)", name)
+	}
+	return name, nil
+}
+
 // ValidateHostPaths resolves all consumed paths to existing physical paths.
 // It mutates cfg only after each individual path has passed its checks.
 func ValidateHostPaths(cfg *Config, configPath string, env Environment) ([]Warning, error) {
+	return validateHostPaths(cfg, configPath, env, true, true)
+}
+
+// ValidateHostPathsForAgent validates common paths plus one selected harness.
+func ValidateHostPathsForAgent(cfg *Config, configPath string, env Environment, agent string) ([]Warning, error) {
+	return validateHostPaths(cfg, configPath, env, agent == "opencode", agent == "pi")
+}
+
+func validateHostPaths(cfg *Config, configPath string, env Environment, validateOpenCode, validatePi bool) ([]Warning, error) {
 	configDir := filepath.Dir(configPath)
 	for i := range cfg.Mounts {
 		candidate, err := resolveTOMLPath(cfg.Mounts[i].Source, configDir, env.Home)
@@ -279,7 +321,7 @@ func ValidateHostPaths(cfg *Config, configPath string, env Environment) ([]Warni
 	}
 
 	warnings := make([]Warning, 0, 3)
-	if cfg.OpenCode.ConfigPathExplicit {
+	if validateOpenCode && cfg.OpenCode.ConfigPathExplicit {
 		resolved, err := resolveTOMLPath(cfg.OpenCode.ConfigPath, configDir, env.Home)
 		if err != nil {
 			return nil, fmt.Errorf("opencode.config_path: %w", err)
@@ -289,7 +331,7 @@ func ValidateHostPaths(cfg *Config, configPath string, env Environment) ([]Warni
 			return nil, fmt.Errorf("opencode.config_path %q: %w", resolved, err)
 		}
 		cfg.OpenCode.ConfigPath = physical
-	} else {
+	} else if validateOpenCode {
 		base, err := xdgBase(env.XDGConfigHome, env.Home, ".config", "XDG_CONFIG_HOME")
 		if err != nil {
 			if env.XDGConfigHome != "" || env.Home != "" {
@@ -307,6 +349,36 @@ func ValidateHostPaths(cfg *Config, configPath string, env Environment) ([]Warni
 				}
 			} else {
 				cfg.OpenCode.ConfigPath = physical
+			}
+		}
+	}
+
+	if validatePi && cfg.Pi.ConfigPathExplicit {
+		resolved, err := resolveTOMLPath(cfg.Pi.ConfigPath, configDir, env.Home)
+		if err != nil {
+			return nil, fmt.Errorf("pi.config_path: %w", err)
+		}
+		physical, err := requirePath(resolved, pathDirectory)
+		if err != nil {
+			return nil, fmt.Errorf("pi.config_path %q: %w", resolved, err)
+		}
+		if err := requireWritableDirectory(physical); err != nil {
+			return nil, fmt.Errorf("pi.config_path %q: %w", physical, err)
+		}
+		cfg.Pi.ConfigPath = physical
+	} else if validatePi {
+		if err := requireAbsoluteHome(env.Home); err != nil {
+			warnings = append(warnings, Warning("Pi config path is unavailable; Wisp will use project-local Pi state: "+err.Error()))
+		} else {
+			candidate := filepath.Join(env.Home, ".pi", "agent")
+			physical, pathErr := requirePath(candidate, pathDirectory)
+			if pathErr == nil {
+				if err := requireWritableDirectory(physical); err != nil {
+					return nil, fmt.Errorf("Pi config path %q: %w", physical, err)
+				}
+				cfg.Pi.ConfigPath = physical
+			} else if !errors.Is(pathErr, os.ErrNotExist) {
+				return nil, fmt.Errorf("Pi config path %q: %w", candidate, pathErr)
 			}
 		}
 	}
@@ -331,6 +403,9 @@ func ValidateHostPaths(cfg *Config, configPath string, env Environment) ([]Warni
 		}
 	}
 
+	if !validateOpenCode {
+		return warnings, nil
+	}
 	dataBase, err := xdgBase(env.XDGDataHome, env.Home, filepath.Join(".local", "share"), "XDG_DATA_HOME")
 	if err != nil {
 		if env.XDGDataHome != "" || env.Home != "" {
@@ -369,6 +444,7 @@ type HostPathDiagnostics struct {
 	AWSSSOCache    HostPathDiagnostic
 	OpenCodeConfig HostPathDiagnostic
 	OpenCodeAuth   HostPathDiagnostic
+	PiConfig       HostPathDiagnostic
 	HunkConfig     HostPathDiagnostic
 }
 
@@ -411,6 +487,32 @@ func DiagnoseHostPaths(cfg Config, configPath string, env Environment) HostPathD
 			result.OpenCodeConfig.Err = err
 		} else {
 			result.OpenCodeConfig.Path = physical
+		}
+	}
+
+	if cfg.Pi.ConfigPathExplicit {
+		candidate, err := resolveTOMLPath(cfg.Pi.ConfigPath, configDir, env.Home)
+		result.PiConfig.Path = candidate
+		if err == nil {
+			result.PiConfig.Path, err = requirePath(candidate, pathDirectory)
+		}
+		if err == nil {
+			err = requireWritableDirectory(result.PiConfig.Path)
+		}
+		result.PiConfig.Err = err
+	} else if err := requireAbsoluteHome(env.Home); err != nil {
+		result.PiConfig.Warning = Warning("Pi config path is unavailable: " + err.Error())
+	} else {
+		candidate := filepath.Join(env.Home, ".pi", "agent")
+		result.PiConfig.Path = candidate
+		physical, err := requirePath(candidate, pathDirectory)
+		if errors.Is(err, os.ErrNotExist) {
+			result.PiConfig.Warning = Warning(fmt.Sprintf("Pi config directory %q does not exist; Wisp will use project-local Pi state", candidate))
+		} else if err != nil {
+			result.PiConfig.Err = err
+		} else {
+			result.PiConfig.Path = physical
+			result.PiConfig.Err = requireWritableDirectory(physical)
 		}
 	}
 
@@ -540,6 +642,13 @@ func requirePath(candidate string, kind requiredPathType) (string, error) {
 		return "", err
 	}
 	return physical, nil
+}
+
+func requireWritableDirectory(path string) error {
+	if err := unix.Access(path, unix.W_OK); err != nil {
+		return fmt.Errorf("is not writable: %w", err)
+	}
+	return nil
 }
 
 func requireAbsoluteHome(home string) error {

@@ -78,7 +78,7 @@ func TestRunHerdrReexecutesBeforeAppConstruction(t *testing.T) {
 	if gotExecutable != "/opt/wisp/bin/wisp" {
 		t.Errorf("re-exec executable = %q", gotExecutable)
 	}
-	if want := []string{"wisp-link", "repo", "--aws", "dev"}; !reflect.DeepEqual(gotPlan.Argv, want) {
+	if want := []string{"wisp-link", "repo", "--aws", "dev", "--agent=opencode"}; !reflect.DeepEqual(gotPlan.Argv, want) {
 		t.Errorf("re-exec argv = %q, want %q", gotPlan.Argv, want)
 	}
 	if want := []string{"HOME=/home/test", "HERDR_AGENT=opencode", "TERM=xterm"}; !reflect.DeepEqual(gotPlan.Env, want) {

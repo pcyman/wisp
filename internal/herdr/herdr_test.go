@@ -29,7 +29,7 @@ func TestBuildPlan(t *testing.T) {
 			if plan.Required != tt.required {
 				t.Errorf("BuildPlan() Required = %v, want %v", plan.Required, tt.required)
 			}
-			wantArgv := []string{"wisp-link", "repo", "--aws", "dev"}
+			wantArgv := []string{"wisp-link", "repo", "--aws", "dev", "--agent=opencode"}
 			if !reflect.DeepEqual(plan.Argv, wantArgv) {
 				t.Errorf("BuildPlan() Argv = %q, want %q", plan.Argv, wantArgv)
 			}
@@ -60,9 +60,20 @@ func TestBuildPlanOnlyRemovesCommandPosition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildPlan() error = %v", err)
 	}
-	want := []string{"wisp", "herdr", "--", "herdr"}
+	want := []string{"wisp", "herdr", "--agent=opencode", "--", "herdr"}
 	if !reflect.DeepEqual(plan.Argv, want) {
 		t.Fatalf("BuildPlan() Argv = %q, want %q", plan.Argv, want)
+	}
+}
+
+func TestBuildPlanRejectsPi(t *testing.T) {
+	for _, argv := range [][]string{
+		{"wisp", "herdr", "--agent", "pi"},
+		{"wisp", "herdr", "--agent=pi"},
+	} {
+		if _, err := BuildPlan(argv, nil); err == nil || !strings.Contains(err.Error(), "only supports") {
+			t.Fatalf("BuildPlan(%q) error = %v", argv, err)
+		}
 	}
 }
 

@@ -23,6 +23,16 @@ func Decode(data []byte) (RawConfig, error) {
 // Load reads a config once, strictly decodes it, validates it, and retains the
 // exact input bytes in the returned result.
 func Load(configPath string, env Environment) (Result, error) {
+	return load(configPath, env, "", false)
+}
+
+// LoadForRun validates common host inputs and only the selected agent's host
+// paths, so an unused harness configuration cannot block a run.
+func LoadForRun(configPath string, env Environment, requestedAgent string) (Result, error) {
+	return load(configPath, env, requestedAgent, true)
+}
+
+func load(configPath string, env Environment, requestedAgent string, selectedOnly bool) (Result, error) {
 	if !filepath.IsAbs(configPath) {
 		return Result{}, fmt.Errorf("config path %q is not absolute", configPath)
 	}
@@ -48,11 +58,20 @@ func Load(configPath string, env Environment) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("validate config %q: %w", configPath, err)
 	}
-	warnings, err := ValidateHostPaths(&cfg, configPath, env)
+	selectedAgent, err := SelectAgent(cfg, requestedAgent)
 	if err != nil {
 		return Result{}, fmt.Errorf("validate config %q: %w", configPath, err)
 	}
-	return Result{Path: configPath, Snapshot: data, Config: cfg, Warnings: warnings}, nil
+	var warnings []Warning
+	if selectedOnly {
+		warnings, err = ValidateHostPathsForAgent(&cfg, configPath, env, selectedAgent)
+	} else {
+		warnings, err = ValidateHostPaths(&cfg, configPath, env)
+	}
+	if err != nil {
+		return Result{}, fmt.Errorf("validate config %q: %w", configPath, err)
+	}
+	return Result{Path: configPath, Snapshot: data, Config: cfg, SelectedAgent: selectedAgent, Warnings: warnings}, nil
 }
 
 // Validate is the config-command API. It has no Docker, network, or AWS side

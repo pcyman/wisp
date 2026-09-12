@@ -57,6 +57,7 @@ func privateProcessEnvironment(value string) []string {
 		"WISP_PROJECT_HASH=" + value,
 		"WISP_CLI_VERSION=" + value,
 		"OPENCODE_VERSION=" + value,
+		"PI_VERSION=" + value,
 		"HUNK_VERSION=" + value,
 		"AWS_CLI_VERSION=" + value,
 		"KUBECTL_VERSION=" + value,
@@ -160,7 +161,7 @@ mode = "rw"
 	wantTargets := []string{
 		"/workspace/current",
 		"/run/wisp/opencode/config",
-		"/run/wisp/opencode/data/opencode/auth.json",
+		"/run/wisp/agent/data/opencode/auth.json",
 		"/run/wisp/hunk/config.toml",
 		"/workspace/repos/configured",
 		"/workspace/repos/cli",
@@ -193,8 +194,8 @@ mode = "rw"
 		plan.RuntimeDirectories.Private != filepath.Join(root, "wisp-"+plan.Environment["WISP_UID"]) {
 		t.Fatalf("runtime directories = %#v", plan.RuntimeDirectories)
 	}
-	if plan.OpenCodeDataRoot != filepath.Join(home, ".local", "share", "wisp") {
-		t.Fatalf("OpenCode data root = %q", plan.OpenCodeDataRoot)
+	if plan.AgentDataRoot != filepath.Join(home, ".local", "share", "wisp") {
+		t.Fatalf("agent data root = %q", plan.AgentDataRoot)
 	}
 	if len(plan.Warnings) != 0 {
 		t.Fatalf("warnings = %q", plan.Warnings)
@@ -273,6 +274,66 @@ func TestPlanRunWithoutAWSHasNoAWSInputs(t *testing.T) {
 	}
 }
 
+func TestPlanRunSelectsPiWithSharedProfile(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	projectDir := filepath.Join(root, "project")
+	piDir := filepath.Join(home, ".pi", "agent")
+	for _, dir := range []string{projectDir, piDir} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	configPath := filepath.Join(root, "config.toml")
+	if err := os.WriteFile(configPath, []byte("schema_version = 1\n[agent]\ndefault = \"pi\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := PlanRun(context.Background(), runRequest(configPath, projectDir, ""), PlanOptions{
+		InvocationDir: root,
+		UID:           os.Getuid(),
+		GID:           os.Getgid(),
+		Environment:   HostEnvironment{Home: home, TempDir: root},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.AgentKey != "pi" || plan.AgentName != "Pi" || !plan.SharedPiProfile {
+		t.Fatalf("Pi selection = %#v", plan)
+	}
+	if !reflect.DeepEqual(plan.Command, []string{"pi", "-e", "/usr/local/share/wisp/pi-agent-status.mjs"}) {
+		t.Fatalf("Pi command = %#v", plan.Command)
+	}
+	if len(plan.Mounts) < 2 || plan.Mounts[1].Source != piDir || plan.Mounts[1].Target != "/run/wisp/pi/agent" || plan.Mounts[1].ReadOnly {
+		t.Fatalf("Pi profile mount = %#v", plan.Mounts)
+	}
+	if plan.AgentDataMountIndex != 2 {
+		t.Fatalf("Pi data insertion index = %d", plan.AgentDataMountIndex)
+	}
+	for _, warning := range plan.Warnings {
+		if strings.HasPrefix(warning.String(), "OpenCode ") {
+			t.Fatalf("Pi plan retained irrelevant warning %q", warning)
+		}
+	}
+}
+
+func TestPlanRunCLIOverridesConfiguredAgent(t *testing.T) {
+	root, configPath, projectDir := applicationFixture(t)
+	request := runRequest(configPath, projectDir, "")
+	request.Agent = "pi"
+	plan, err := PlanRun(context.Background(), request, PlanOptions{
+		InvocationDir: root,
+		UID:           os.Getuid(),
+		GID:           os.Getgid(),
+		Environment:   HostEnvironment{Home: filepath.Join(root, "home"), TempDir: root},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.AgentKey != "pi" {
+		t.Fatalf("agent = %q, want pi", plan.AgentKey)
+	}
+}
+
 func TestPlanRunReportsConfigResolutionError(t *testing.T) {
 	root := t.TempDir()
 	_, err := PlanRun(context.Background(), runRequest(filepath.Join(root, "missing.toml"), root, ""), PlanOptions{
@@ -322,18 +383,18 @@ func TestPlanRuntimeDirectoriesFallsBackToPrivateTempRoot(t *testing.T) {
 	}
 }
 
-func TestPlanOpenCodeDataRootUsesXDGDataHome(t *testing.T) {
+func TestPlanAgentDataRootUsesXDGDataHome(t *testing.T) {
 	root := t.TempDir()
-	got, err := planOpenCodeDataRoot(HostEnvironment{Home: filepath.Join(root, "home"), XDGDataHome: filepath.Join(root, "data")})
+	got, err := planAgentDataRoot(HostEnvironment{Home: filepath.Join(root, "home"), XDGDataHome: filepath.Join(root, "data")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if want := filepath.Join(root, "data", "wisp"); got != want {
-		t.Fatalf("OpenCode data root = %q, want %q", got, want)
+		t.Fatalf("agent data root = %q, want %q", got, want)
 	}
 }
 
-func TestPlanOpenCodeDataRootRejectsMissingOrRelativeBase(t *testing.T) {
+func TestPlanAgentDataRootRejectsMissingOrRelativeBase(t *testing.T) {
 	for _, test := range []struct {
 		name string
 		env  HostEnvironment
@@ -342,8 +403,8 @@ func TestPlanOpenCodeDataRootRejectsMissingOrRelativeBase(t *testing.T) {
 		{name: "relative XDG", env: HostEnvironment{Home: t.TempDir(), XDGDataHome: "data"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := planOpenCodeDataRoot(test.env); err == nil {
-				t.Fatal("invalid OpenCode data base was accepted")
+			if _, err := planAgentDataRoot(test.env); err == nil {
+				t.Fatal("invalid agent data base was accepted")
 			}
 		})
 	}

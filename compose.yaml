@@ -51,6 +51,7 @@ services:
       context: .
       args:
         OPENCODE_VERSION: ${OPENCODE_VERSION:-}
+        PI_VERSION: ${PI_VERSION:-0.85.1}
         HUNK_VERSION: ${HUNK_VERSION:-}
         AWS_CLI_VERSION: ${AWS_CLI_VERSION:-}
         KUBECTL_VERSION: ${KUBECTL_VERSION:-}
@@ -63,7 +64,9 @@ services:
       HOME: /home/sandbox
       KUBECONFIG: /home/sandbox/.kube/config
       TMPDIR: /run/wisp/tmp
-      XDG_DATA_HOME: /run/wisp/opencode/data
+      XDG_DATA_HOME: /run/wisp/agent/data
+      PI_CODING_AGENT_DIR: /run/wisp/pi/agent
+      PI_CODING_AGENT_SESSION_DIR: /run/wisp/pi/sessions
       TERM: ${TERM:-}
       COLORTERM: ${COLORTERM:-}
     labels:

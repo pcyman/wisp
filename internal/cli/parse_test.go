@@ -19,6 +19,7 @@ func TestParseRun(t *testing.T) {
 		{name: "explicit reserved directory", args: []string{"run", "config"}, want: RunRequest{Directory: "config"}},
 		{name: "explicit path named like command", args: []string{"./config"}, want: RunRequest{Directory: "./config"}},
 		{name: "options before directory", args: []string{"--aws", "prod", "--rebuild", "dir"}, want: RunRequest{Directory: "dir", AWSAlias: "prod", Rebuild: true}},
+		{name: "agent override", args: []string{"--agent", "pi", "dir"}, want: RunRequest{Directory: "dir", Agent: "pi"}},
 		{name: "options after directory", args: []string{"dir", "--config=cfg.toml", "--aws=dev"}, want: RunRequest{Directory: "dir", ConfigPath: "cfg.toml", AWSAlias: "dev"}},
 		{name: "repeatable mounts", args: []string{"--mount", "one", "--mount=two", "--mount-rw", "three", "--mount-rw=four"}, want: RunRequest{Directory: ".", ReadOnlyMounts: []string{"one", "two"}, ReadWriteMounts: []string{"three", "four"}}},
 		{name: "delimiter path", args: []string{"run", "--", "-project"}, want: RunRequest{Directory: "-project"}},
@@ -59,6 +60,8 @@ func TestParseRunErrors(t *testing.T) {
 		{name: "aws missing", args: []string{"--aws"}, want: "nonempty value"},
 		{name: "aws empty", args: []string{"--aws="}, want: "nonempty value"},
 		{name: "config missing", args: []string{"--config"}, want: "nonempty value"},
+		{name: "agent missing", args: []string{"--agent"}, want: "nonempty value"},
+		{name: "duplicate agent", args: []string{"--agent=pi", "--agent", "opencode"}, want: "only be specified once"},
 		{name: "mount empty", args: []string{"--mount="}, want: "nonempty value"},
 		{name: "mount rw missing", args: []string{"--mount-rw"}, want: "nonempty value"},
 		{name: "duplicate aws", args: []string{"--aws", "one", "--aws=two"}, want: "only be specified once"},
@@ -131,6 +134,12 @@ func TestParseHerdrErrorsMatchRun(t *testing.T) {
 		if runErr == nil || herdrErr == nil || runErr.Error() != herdrErr.Error() {
 			t.Fatalf("suffix %q errors = run %v, Herdr %v; want equal errors", suffix, runErr, herdrErr)
 		}
+	}
+}
+
+func TestParseHerdrRejectsPi(t *testing.T) {
+	if _, err := Parse([]string{"herdr", "--agent", "pi"}); err == nil || !strings.Contains(err.Error(), "only supports") {
+		t.Fatalf("Parse() error = %v", err)
 	}
 }
 

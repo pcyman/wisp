@@ -84,3 +84,35 @@ func TestPrepareOpenCodeDataMountRejectsManagedSymlink(t *testing.T) {
 		t.Fatalf("error = %v, want managed symlink rejection", err)
 	}
 }
+
+func TestPreparePiDataMountsWithSharedProfile(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "data", "wisp")
+	mounts, err := preparePiDataMounts(root, "hash", os.Getuid(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mounts) != 3 || mounts[0].Target != agent.PiSessionsTarget || mounts[1].Target != agent.PiTrustTarget || mounts[2].Target != agent.DataTarget {
+		t.Fatalf("Pi mounts = %#v", mounts)
+	}
+	if mounts[0].ReadOnly || mounts[1].ReadOnly || mounts[2].ReadOnly {
+		t.Fatalf("Pi project state is not writable: %#v", mounts)
+	}
+	trust, err := os.ReadFile(mounts[1].Source)
+	if err != nil || string(trust) != "{}\n" {
+		t.Fatalf("trust state = %q, %v", trust, err)
+	}
+}
+
+func TestPreparePiDataMountsWithoutSharedProfile(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "data", "wisp")
+	mounts, err := preparePiDataMounts(root, "hash", os.Getuid(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mounts) != 3 || mounts[0].Target != agent.PiAgentTarget || mounts[1].Target != agent.PiSessionsTarget || mounts[2].Target != agent.DataTarget {
+		t.Fatalf("Pi mounts = %#v", mounts)
+	}
+	if filepath.Dir(mounts[1].Source) != mounts[0].Source {
+		t.Fatalf("session source %q is not in local profile %q", mounts[1].Source, mounts[0].Source)
+	}
+}

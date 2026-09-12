@@ -97,7 +97,7 @@ func (a *App) doctor(ctx context.Context, override string) int {
 	}
 
 	if !configResolved {
-		for _, check := range []string{"AWS support", "OpenCode config", "OpenCode auth", "Hunk config", "mounts", "mount collisions"} {
+		for _, check := range []string{"AWS support", "OpenCode config", "OpenCode auth", "Pi config", "Hunk config", "mounts", "mount collisions"} {
 			report.line("FAIL", check, "not available because config validation failed")
 		}
 	} else {
@@ -116,6 +116,7 @@ func (a *App) doctor(ctx context.Context, override string) int {
 		}
 		reportHostPath(report, "OpenCode config", paths.OpenCodeConfig, true)
 		reportHostPath(report, "OpenCode auth", paths.OpenCodeAuth, true)
+		reportHostPath(report, "Pi config", paths.PiConfig, true)
 		reportHostPath(report, "Hunk config", paths.HunkConfig, true)
 		if mountValidationErr == nil {
 			for i, configured := range effective.Mounts {

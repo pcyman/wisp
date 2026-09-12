@@ -109,8 +109,12 @@ func (a *App) collectAgents(ctx context.Context) ([]byte, error) {
 		if docker.VerifyLabels(container.Labels, labels) != nil {
 			continue
 		}
+		agentName := entry.Agent
+		if agentName == "" {
+			agentName = "opencode"
+		}
 		item := agent{
-			ID: entry.RunID, SandboxID: entry.SandboxName, Repo: entry.Repo, Agent: "opencode",
+			ID: entry.RunID, SandboxID: entry.SandboxName, Repo: entry.Repo, Agent: agentName,
 			State: entry.Report.State, Reason: entry.Report.Reason,
 			Reporter: entry.Report.Reporter, UpdatedAt: entry.Report.UpdatedAt,
 		}

@@ -30,6 +30,7 @@ type Metadata struct {
 	ComposeProject string `json:"compose_project"`
 	UID            int    `json:"uid"`
 	HostPID        int    `json:"host_pid,omitempty"`
+	Agent          string `json:"agent"`
 }
 
 type Report struct {

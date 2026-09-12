@@ -65,6 +65,7 @@ func runWithHost(args []string, stdout, stderr io.Writer, host hostProcess) int 
 			return 0
 		}
 		req.Command = cli.CommandRun
+		req.Run.Agent = herdr.AgentOpenCode
 	}
 
 	application, err := app.New(app.Dependencies{

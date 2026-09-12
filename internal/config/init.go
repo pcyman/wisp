@@ -18,6 +18,7 @@ cpus = 4
 
 [build.versions]
 opencode = ""
+pi = "0.85.1"
 hunk = ""
 aws_cli = ""
 kubectl = ""
@@ -28,8 +29,14 @@ uv = ""
 go = ""
 boto3 = "1.35.99"
 
+[agent]
+default = "opencode"
+
 [opencode]
 # config_path = "~/.config/opencode"
+
+[pi]
+# config_path = "~/.pi/agent"
 
 # AWS is opt-in. Uncomment this table and at least one alias to enable it.
 # [aws]

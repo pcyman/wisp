@@ -6,7 +6,7 @@ const rootHelp = `Usage:
 
 Commands:
   agents    List or watch running Wisp agents as JSON
-  run       Launch OpenCode in the sandbox
+  run       Launch the selected agent in the sandbox
   herdr     Launch OpenCode with Herdr integration
   exec      Execute a command in a running sandbox
   hunk      Run Hunk in a running sandbox
@@ -33,6 +33,7 @@ stdout errors exit nonzero. Each collection has a 10-second timeout.
   wisp run [RUN_OPTIONS] [DIRECTORY]
 
 Options:
+  --agent NAME     Select opencode or pi for this run
   --aws ALIAS       Select a configured AWS alias
   --rebuild         Rebuild both images
   --mount DIRECTORY Add a read-only repository mount (repeatable)
@@ -45,7 +46,7 @@ Options:
 
 Launch the normal Wisp OpenCode sandbox while identifying the host-side Wisp
 process to Herdr as an OpenCode agent. Herdr is not exposed inside the sandbox.
-Run options are identical to "wisp run"; see "wisp help run".
+Run options other than selecting Pi are accepted; see "wisp help run".
 `,
 	CommandExec: `Usage:
   wisp exec [DIRECTORY] -- COMMAND [ARG...]

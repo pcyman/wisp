@@ -9,6 +9,7 @@ import (
 func TestStatusReporterPackaging(t *testing.T) {
 	for path, required := range map[string]string{
 		"container/agent-status.js": "export const AgentStatusPlugin",
+		"container/pi-agent-status.mjs": "agent_settled",
 		".dockerignore":             "!container/agent-status.js",
 		"Dockerfile":                "COPY --chmod=0644 container/agent-status.js /usr/local/share/wisp/agent-status.js",
 		"container/entrypoint.sh":   "export OPENCODE_CONFIG=/usr/local/share/wisp/opencode.json",
@@ -21,6 +22,10 @@ func TestStatusReporterPackaging(t *testing.T) {
 		if !strings.Contains(string(data), required) {
 			t.Errorf("%s missing reporter integration %q", path, required)
 		}
+	}
+	ignore, err := RuntimeAssets.ReadFile(".dockerignore")
+	if err != nil || !strings.Contains(string(ignore), "!container/pi-agent-status.mjs") {
+		t.Fatalf("Pi reporter is excluded from image context: %v", err)
 	}
 }
 
@@ -74,7 +79,9 @@ func TestSandboxComposeHardening(t *testing.T) {
 	sandbox := compose[index+len(marker):]
 	for _, required := range []string{
 		"      TMPDIR: /run/wisp/tmp\n",
-		"      XDG_DATA_HOME: /run/wisp/opencode/data\n",
+		"      XDG_DATA_HOME: /run/wisp/agent/data\n",
+		"      PI_CODING_AGENT_DIR: /run/wisp/pi/agent\n",
+		"      PI_CODING_AGENT_SESSION_DIR: /run/wisp/pi/sessions\n",
 		"    read_only: true\n",
 		"    cap_drop:\n      - ALL\n",
 		"    security_opt:\n      - no-new-privileges:true\n",
@@ -99,6 +106,7 @@ func TestReporterReadableBySandboxUser(t *testing.T) {
 		"RUN install -d -m 0755 /usr/local/share/wisp\n",
 		"RUN chmod 0755 /usr/local/share/wisp\n",
 		"USER sandbox\nRUN test -r /usr/local/share/wisp/agent-status.js\n",
+		"RUN test -r /usr/local/share/wisp/pi-agent-status.mjs\n",
 	} {
 		if !strings.Contains(dockerfile, required) {
 			t.Errorf("Dockerfile missing reporter permission safeguard %q", required)

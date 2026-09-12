@@ -54,27 +54,30 @@ type RuntimeDirectories struct {
 // SandboxPlan is the complete validated input to the Docker run lifecycle.
 // Callers should treat it as immutable after construction.
 type SandboxPlan struct {
-	Project            project.Project
-	ConfigPath         string
-	ConfigSnapshot     []byte
-	AWSEnabled         bool
-	SelectedAWSAlias   string
-	AWSConfigPath      string
-	AWSCredentialsPath string
-	AWSSSOCachePath    string
-	UID                int
-	GID                int
-	Images             config.ImageConfig
-	Versions           config.VersionConfig
-	BuildCPUs          int
-	Rebuild            bool
-	AgentName          string
-	Command            []string
-	Mounts             []docker.Mount
-	OpenCodeDataRoot   string
-	Environment        map[string]string
-	RuntimeDirectories RuntimeDirectories
-	Warnings           []config.Warning
+	Project             project.Project
+	ConfigPath          string
+	ConfigSnapshot      []byte
+	AWSEnabled          bool
+	SelectedAWSAlias    string
+	AWSConfigPath       string
+	AWSCredentialsPath  string
+	AWSSSOCachePath     string
+	UID                 int
+	GID                 int
+	Images              config.ImageConfig
+	Versions            config.VersionConfig
+	BuildCPUs           int
+	Rebuild             bool
+	AgentKey            string
+	AgentName           string
+	Command             []string
+	Mounts              []docker.Mount
+	AgentDataRoot       string
+	AgentDataMountIndex int
+	SharedPiProfile     bool
+	Environment         map[string]string
+	RuntimeDirectories  RuntimeDirectories
+	Warnings            []config.Warning
 }
 
 // PlanRun resolves and validates every run input before lifecycle code can
@@ -99,7 +102,7 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 	if err != nil {
 		return SandboxPlan{}, err
 	}
-	loaded, err := config.Load(configPath, cfgEnv)
+	loaded, err := config.LoadForRun(configPath, cfgEnv, request.Agent)
 	if err != nil {
 		return SandboxPlan{}, err
 	}
@@ -148,11 +151,14 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 	if err != nil {
 		return SandboxPlan{}, err
 	}
-	openCodeDataRoot, err := planOpenCodeDataRoot(options.Environment)
+	agentDataRoot, err := planAgentDataRoot(options.Environment)
 	if err != nil {
 		return SandboxPlan{}, err
 	}
-	selectedAgent := agent.Default()
+	selectedAgent, err := agent.Select(loaded.SelectedAgent, "")
+	if err != nil {
+		return SandboxPlan{}, err
+	}
 	projectMount, err := docker.Bind(resolvedProject.RootDir, projectTarget, false)
 	if err != nil {
 		return SandboxPlan{}, err
@@ -170,11 +176,18 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 			}
 		}
 	}
+	agentMountStart := len(plannedMounts)
 	agentMounts, err := selectedAgent.HostMounts(loaded.Config)
 	if err != nil {
 		return SandboxPlan{}, err
 	}
 	plannedMounts = append(plannedMounts, agentMounts...)
+	agentDataMountIndex := agentMountStart
+	sharedPiProfile := selectedAgent.Key() == "pi" && loaded.Config.Pi.ConfigPath != ""
+	if sharedPiProfile {
+		// Pi's project-local trust overlay must follow its shared parent mount.
+		agentDataMountIndex++
+	}
 	for _, extra := range extraMounts {
 		planned, err := docker.Bind(extra.Source, extra.Target, extra.Mode == mount.ReadOnly)
 		if err != nil {
@@ -186,40 +199,43 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 	environment := plannedEnvironment(options, loaded.Config, selectedAlias, resolvedProject.Hash)
 
 	return SandboxPlan{
-		Project:            resolvedProject,
-		ConfigPath:         loaded.Path,
-		ConfigSnapshot:     append([]byte(nil), loaded.Snapshot...),
-		AWSEnabled:         loaded.Config.AWS.Enabled,
-		SelectedAWSAlias:   selectedAlias,
-		AWSConfigPath:      loaded.Config.AWS.HostConfigPath,
-		AWSCredentialsPath: loaded.Config.AWS.HostCredentialsPath,
-		AWSSSOCachePath:    loaded.Config.AWS.SSOCachePath,
-		UID:                options.UID,
-		GID:                options.GID,
-		Images:             loaded.Config.Images,
-		Versions:           loaded.Config.Build.Versions,
-		BuildCPUs:          loaded.Config.Build.CPUs,
-		Rebuild:            request.Rebuild,
-		AgentName:          selectedAgent.Name(),
-		Command:            append([]string(nil), selectedAgent.ContainerCommand()...),
-		Mounts:             plannedMounts,
-		OpenCodeDataRoot:   openCodeDataRoot,
-		Environment:        environment,
-		RuntimeDirectories: directories,
-		Warnings:           append([]config.Warning(nil), loaded.Warnings...),
+		Project:             resolvedProject,
+		ConfigPath:          loaded.Path,
+		ConfigSnapshot:      append([]byte(nil), loaded.Snapshot...),
+		AWSEnabled:          loaded.Config.AWS.Enabled,
+		SelectedAWSAlias:    selectedAlias,
+		AWSConfigPath:       loaded.Config.AWS.HostConfigPath,
+		AWSCredentialsPath:  loaded.Config.AWS.HostCredentialsPath,
+		AWSSSOCachePath:     loaded.Config.AWS.SSOCachePath,
+		UID:                 options.UID,
+		GID:                 options.GID,
+		Images:              loaded.Config.Images,
+		Versions:            loaded.Config.Build.Versions,
+		BuildCPUs:           loaded.Config.Build.CPUs,
+		Rebuild:             request.Rebuild,
+		AgentKey:            selectedAgent.Key(),
+		AgentName:           selectedAgent.Name(),
+		Command:             append([]string(nil), selectedAgent.ContainerCommand()...),
+		Mounts:              plannedMounts,
+		AgentDataRoot:       agentDataRoot,
+		AgentDataMountIndex: agentDataMountIndex,
+		SharedPiProfile:     sharedPiProfile,
+		Environment:         environment,
+		RuntimeDirectories:  directories,
+		Warnings:            append([]config.Warning(nil), loaded.Warnings...),
 	}, nil
 }
 
-func planOpenCodeDataRoot(environment HostEnvironment) (string, error) {
+func planAgentDataRoot(environment HostEnvironment) (string, error) {
 	base := environment.XDGDataHome
 	if base == "" {
 		if environment.Home == "" {
-			return "", fmt.Errorf("determine OpenCode data directory: neither XDG_DATA_HOME nor HOME is set")
+			return "", fmt.Errorf("determine agent data directory: neither XDG_DATA_HOME nor HOME is set")
 		}
 		base = filepath.Join(environment.Home, ".local", "share")
 	}
 	if !filepath.IsAbs(base) {
-		return "", fmt.Errorf("OpenCode data base %q is not absolute", base)
+		return "", fmt.Errorf("agent data base %q is not absolute", base)
 	}
 	return filepath.Join(filepath.Clean(base), "wisp"), nil
 }
@@ -234,6 +250,7 @@ func plannedEnvironment(options PlanOptions, cfg config.Config, alias, projectHa
 		"WISP_PROJECT_HASH":      projectHash,
 		"WISP_CLI_VERSION":       options.CLIVersion,
 		"OPENCODE_VERSION":       versions.OpenCode,
+		"PI_VERSION":             versions.Pi,
 		"HUNK_VERSION":           versions.Hunk,
 		"AWS_CLI_VERSION":        versions.AWSCLI,
 		"KUBECTL_VERSION":        versions.Kubectl,

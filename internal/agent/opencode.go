@@ -10,7 +10,7 @@ const (
 	// OpenCodeDataTarget is OpenCode's writable application directory beneath
 	// the sandbox's XDG_DATA_HOME. Keep it outside HOME so Docker does not
 	// create root-owned parents that block OpenCode from creating XDG state.
-	OpenCodeDataTarget = "/run/wisp/opencode/data/opencode"
+	OpenCodeDataTarget = DataTarget + "/opencode"
 	openCodeAuthTarget = OpenCodeDataTarget + "/auth.json"
 	hunkConfigTarget   = "/run/wisp/hunk/config.toml"
 )
@@ -18,6 +18,7 @@ const (
 // OpenCode is Wisp's interactive sandbox agent.
 type OpenCode struct{}
 
+func (OpenCode) Key() string  { return "opencode" }
 func (OpenCode) Name() string { return "OpenCode" }
 
 // ContainerCommand deliberately accepts no host-provided arguments.

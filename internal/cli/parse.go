@@ -45,6 +45,7 @@ type AgentsRequest struct {
 type RunRequest struct {
 	Directory       string
 	ConfigPath      string
+	Agent           string
 	AWSAlias        string
 	Rebuild         bool
 	ReadOnlyMounts  []string
@@ -151,13 +152,16 @@ func parseHerdr(args []string) (Request, error) {
 	if err != nil {
 		return Request{}, err
 	}
+	if req.Run.Agent != "" && strings.ToLower(strings.TrimSpace(req.Run.Agent)) != "opencode" {
+		return Request{}, syntaxf("herdr only supports the opencode agent")
+	}
 	req.Command = CommandHerdr
 	return req, nil
 }
 
 func parseRun(args []string) (Request, error) {
 	req := Request{Command: CommandRun}
-	var directorySet, awsSet, configSet, rebuildSet bool
+	var directorySet, agentSet, awsSet, configSet, rebuildSet bool
 	options := true
 
 	for i := 0; i < len(args); i++ {
@@ -180,6 +184,15 @@ func parseRun(args []string) (Request, error) {
 		if options && strings.HasPrefix(arg, "-") {
 			name, inline, value := splitOption(arg)
 			switch name {
+			case "--agent":
+				if agentSet {
+					return Request{}, syntaxf("--agent may only be specified once")
+				}
+				value, i = optionValue(args, i, name, inline, value)
+				if value == "" {
+					return Request{}, syntaxf("%s requires a nonempty value", name)
+				}
+				agentSet, req.Run.Agent = true, value
 			case "--aws":
 				if awsSet {
 					return Request{}, syntaxf("--aws may only be specified once")

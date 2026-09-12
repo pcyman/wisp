@@ -89,6 +89,37 @@ func TestLoadExplicitOpenCodePathMustExist(t *testing.T) {
 	}
 }
 
+func TestLoadForRunValidatesOnlySelectedAgentPaths(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name       string
+		selected   string
+		irrelevant string
+	}{
+		{name: "Pi ignores OpenCode path", selected: "pi", irrelevant: "opencode"},
+		{name: "OpenCode ignores Pi path", selected: "opencode", irrelevant: "pi"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			configPath := filepath.Join(root, "config.toml")
+			contents := "schema_version = 1\n[" + test.irrelevant + "]\nconfig_path = \"missing\"\n"
+			if err := os.WriteFile(configPath, []byte(contents), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			result, err := LoadForRun(configPath, Environment{Home: root}, test.selected)
+			if err != nil {
+				t.Fatalf("LoadForRun() error = %v", err)
+			}
+			if result.SelectedAgent != test.selected {
+				t.Fatalf("selected agent = %q", result.SelectedAgent)
+			}
+			if _, err := Load(configPath, Environment{Home: root}); err == nil {
+				t.Fatal("full config validation accepted missing path")
+			}
+		})
+	}
+}
+
 func TestLoadWithoutAWSDoesNotRequireAWSHostPaths(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
