@@ -12,7 +12,6 @@ const (
 	CommandRoot           Command = ""
 	CommandRun            Command = "run"
 	CommandAgents         Command = "agents"
-	CommandHerdr          Command = "herdr"
 	CommandExec           Command = "exec"
 	CommandHunk           Command = "hunk"
 	CommandConfig         Command = "config"
@@ -123,8 +122,6 @@ func Parse(args []string) (Request, error) {
 		return req, nil
 	case "run":
 		return parseRun(args[1:])
-	case "herdr":
-		return parseHerdr(args[1:])
 	case "exec":
 		return parseExec(args[1:])
 	case "hunk":
@@ -145,18 +142,6 @@ func Parse(args []string) (Request, error) {
 	default:
 		return parseRun(args)
 	}
-}
-
-func parseHerdr(args []string) (Request, error) {
-	req, err := parseRun(args)
-	if err != nil {
-		return Request{}, err
-	}
-	if req.Run.Agent != "" && strings.ToLower(strings.TrimSpace(req.Run.Agent)) != "opencode" {
-		return Request{}, syntaxf("herdr only supports the opencode agent")
-	}
-	req.Command = CommandHerdr
-	return req, nil
 }
 
 func parseRun(args []string) (Request, error) {
@@ -417,7 +402,7 @@ func parseHelp(args []string) (Request, error) {
 
 func helpCommand(topic string) (Command, bool) {
 	switch Command(topic) {
-	case CommandAgents, CommandRun, CommandHerdr, CommandExec, CommandHunk, CommandConfig, CommandAWS,
+	case CommandAgents, CommandRun, CommandExec, CommandHunk, CommandConfig, CommandAWS,
 		CommandDoctor, CommandVersion, CommandHelp:
 		return Command(topic), true
 	default:

@@ -84,18 +84,6 @@ default = "pi"
 # config_path = "~/.pi/agent"
 ```
 
-Launch Wisp inside [Herdr](https://herdr.dev/):
-
-```sh
-wisp herdr
-```
-
-This always launches the OpenCode sandbox, regardless of the configured agent,
-while identifying the host-side Wisp process to Herdr as an OpenCode agent.
-Herdr itself is not exposed inside the
-sandbox. The `herdr` command name is reserved; use `wisp ./herdr` or
-`wisp run herdr` to launch a directory named `herdr`.
-
 Wisp uses `$XDG_CONFIG_HOME/wisp/config.toml`, falling back to
 `$HOME/.config/wisp/config.toml`. Host OpenCode config and authentication are
 mounted read-only when present. Wisp also mounts only the host Hunk
@@ -118,7 +106,6 @@ state instead.
 
 ```text
 wisp [RUN_OPTIONS] [DIRECTORY]   Launch the selected agent
-wisp herdr [RUN_OPTIONS] [DIRECTORY]
 wisp exec [DIRECTORY] -- COMMAND
 wisp hunk [DIRECTORY] [-- ARGS]
 wisp agents --json

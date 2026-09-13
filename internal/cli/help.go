@@ -7,7 +7,6 @@ const rootHelp = `Usage:
 Commands:
   agents    List or watch running Wisp agents as JSON
   run       Launch the selected agent in the sandbox
-  herdr     Launch OpenCode with Herdr integration
   exec      Execute a command in a running sandbox
   hunk      Run Hunk in a running sandbox
   config    Initialize, locate, or validate configuration
@@ -40,13 +39,6 @@ Options:
   --mount-rw DIR    Add a read-write repository mount (repeatable)
   --config FILE     Use a non-default config file
   -h, --help        Show run help
-`,
-	CommandHerdr: `Usage:
-  wisp herdr [RUN_OPTIONS] [DIRECTORY]
-
-Launch the normal Wisp OpenCode sandbox while identifying the host-side Wisp
-process to Herdr as an OpenCode agent. Herdr is not exposed inside the sandbox.
-Run options other than selecting Pi are accepted; see "wisp help run".
 `,
 	CommandExec: `Usage:
   wisp exec [DIRECTORY] -- COMMAND [ARG...]
