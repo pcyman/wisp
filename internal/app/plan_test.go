@@ -297,7 +297,7 @@ func TestPlanRunSelectsPiWithSharedProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.AgentKey != "pi" || plan.AgentName != "Pi" || !plan.SharedPiProfile {
+	if plan.AgentKey != "pi" || plan.AgentName != "Pi" || !plan.SharedPiProfile || plan.PiProfilePath != piDir {
 		t.Fatalf("Pi selection = %#v", plan)
 	}
 	if !reflect.DeepEqual(plan.Command, []string{"pi", "-e", "/usr/local/share/wisp/pi-agent-status.mjs"}) {

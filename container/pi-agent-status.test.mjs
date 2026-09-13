@@ -4,8 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import statusExtension from "./pi-agent-status.mjs";
-
 test("Pi reporter emits opt-in startup timing markers", async () => {
   const root = await mkdtemp(join(tmpdir(), "wisp-pi-timing-"));
   const previousPath = process.env.WISP_AGENT_STATUS_PATH;
@@ -36,10 +34,13 @@ test("Pi reporter emits opt-in startup timing markers", async () => {
 test("Pi reporter follows busy, prompt, and settled boundaries", async () => {
   const root = await mkdtemp(join(tmpdir(), "wisp-pi-status-"));
   const statusPath = join(root, "status", "agent.json");
-  const previous = process.env.WISP_AGENT_STATUS_PATH;
+  const previousPath = process.env.WISP_AGENT_STATUS_PATH;
+  const previousTiming = process.env.WISP_STARTUP_TIMING;
   process.env.WISP_AGENT_STATUS_PATH = statusPath;
+  process.env.WISP_STARTUP_TIMING = "";
   const handlers = new Map();
   try {
+    const statusExtension = (await import(`./pi-agent-status.mjs?status-test=${Date.now()}`)).default;
     statusExtension({ on(name, handler) { handlers.set(name, handler); } });
     await handlers.get("session_start")({});
     assert.equal(JSON.parse(await readFile(statusPath, "utf8")).state, "idle");
@@ -57,8 +58,10 @@ test("Pi reporter follows busy, prompt, and settled boundaries", async () => {
     await handlers.get("agent_settled")({});
     assert.equal(JSON.parse(await readFile(statusPath, "utf8")).state, "idle");
   } finally {
-    if (previous === undefined) delete process.env.WISP_AGENT_STATUS_PATH;
-    else process.env.WISP_AGENT_STATUS_PATH = previous;
+    if (previousPath === undefined) delete process.env.WISP_AGENT_STATUS_PATH;
+    else process.env.WISP_AGENT_STATUS_PATH = previousPath;
+    if (previousTiming === undefined) delete process.env.WISP_STARTUP_TIMING;
+    else process.env.WISP_STARTUP_TIMING = previousTiming;
     await rm(root, { recursive: true, force: true });
   }
 });

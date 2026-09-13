@@ -32,7 +32,7 @@ func TestStatusReporterPackaging(t *testing.T) {
 func TestStartupTimingInstrumentationIsPackaged(t *testing.T) {
 	for path, required := range map[string]string{
 		"compose.yaml":                  "PI_TIMING: ${WISP_STARTUP_TIMING:-}",
-		"container/entrypoint.sh":       "startup_timing container.exec",
+		"container/entrypoint.sh":       "jiti_cache=\"/run/wisp/jiti-cache/${WISP_PI_JITI_CACHE_KEY}\"",
 		"container/pi-agent-status.mjs": "pi.session_start",
 	} {
 		data, err := RuntimeAssets.ReadFile(path)
@@ -96,6 +96,7 @@ func TestSandboxComposeHardening(t *testing.T) {
 	for _, required := range []string{
 		"      TMPDIR: /run/wisp/tmp\n",
 		"      PI_TIMING: ${WISP_STARTUP_TIMING:-}\n",
+		"      WISP_PI_JITI_CACHE_KEY: ${WISP_PI_JITI_CACHE_KEY:-}\n",
 		"      WISP_STARTUP_TIMING: ${WISP_STARTUP_TIMING:-}\n",
 		"      XDG_DATA_HOME: /run/wisp/agent/data\n",
 		"      PI_CODING_AGENT_DIR: /run/wisp/pi/agent\n",

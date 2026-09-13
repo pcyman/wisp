@@ -31,6 +31,27 @@ func (c *Client) ImageExists(ctx context.Context, image string) (bool, error) {
 	return false, commandError("inspect image "+image, stderr, err)
 }
 
+// InspectImageID returns the immutable ID of an existing image.
+func (c *Client) InspectImageID(ctx context.Context, image string) (string, error) {
+	if strings.TrimSpace(image) == "" {
+		return "", fmt.Errorf("image name is empty")
+	}
+	stdout, stderr, err := c.capture(ctx, []string{"image", "inspect", image}, "", nil)
+	if err != nil {
+		return "", commandError("inspect image "+image, stderr, err)
+	}
+	var values []struct {
+		ID string `json:"Id"`
+	}
+	if err := json.Unmarshal(stdout, &values); err != nil {
+		return "", fmt.Errorf("decode image inspect for %q: %w", image, err)
+	}
+	if len(values) != 1 || strings.TrimSpace(values[0].ID) == "" {
+		return "", fmt.Errorf("image inspect for %q returned invalid identity", image)
+	}
+	return values[0].ID, nil
+}
+
 // InspectContainer returns (nil, nil) only when Docker reports that the named
 // container does not exist.
 func (c *Client) InspectContainer(ctx context.Context, name string) (*Container, error) {

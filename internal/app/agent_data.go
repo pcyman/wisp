@@ -1,6 +1,8 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -66,6 +68,58 @@ func prepareOpenCodeDataMount(root, projectHash string, uid int) (docker.Mount, 
 	mount, err := docker.Bind(physical, agent.OpenCodeDataTarget, false)
 	if err != nil {
 		return docker.Mount{}, fmt.Errorf("mount OpenCode data directory: %w", err)
+	}
+	return mount, nil
+}
+
+func piJITICacheKey(runtimeIdentity string) (string, error) {
+	if runtimeIdentity == "" {
+		return "", fmt.Errorf("Pi Jiti cache runtime identity must not be empty")
+	}
+	sum := sha256.Sum256([]byte(runtimeIdentity))
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func preparePiJITIRuntimeCache(cacheRoot, cacheKey string, uid int) error {
+	if !filepath.IsAbs(cacheRoot) {
+		return fmt.Errorf("Pi Jiti cache root %q is not absolute", cacheRoot)
+	}
+	decoded, err := hex.DecodeString(cacheKey)
+	if err != nil || len(decoded) != sha256.Size || filepath.Base(cacheKey) != cacheKey {
+		return fmt.Errorf("invalid Pi Jiti cache key")
+	}
+	if err := ensurePrivateDataDirectory(filepath.Join(cacheRoot, cacheKey), uid); err != nil {
+		return err
+	}
+	return nil
+}
+
+func preparePiJITICacheMount(cacheBase, profileIdentity string, uid int) (docker.Mount, error) {
+	if !filepath.IsAbs(cacheBase) {
+		return docker.Mount{}, fmt.Errorf("Pi Jiti cache base %q is not absolute", cacheBase)
+	}
+	if profileIdentity == "" {
+		return docker.Mount{}, fmt.Errorf("Pi Jiti cache profile identity must not be empty")
+	}
+
+	profileKey, err := piJITICacheKey(profileIdentity)
+	if err != nil {
+		return docker.Mount{}, err
+	}
+	current := filepath.Clean(cacheBase)
+	for _, component := range []string{"pi-jiti", profileKey} {
+		current = filepath.Join(current, component)
+		if err := ensurePrivateDataDirectory(current, uid); err != nil {
+			return docker.Mount{}, err
+		}
+	}
+	physical, err := filepath.EvalSymlinks(current)
+	if err != nil {
+		return docker.Mount{}, fmt.Errorf("resolve Pi Jiti cache directory %q: %w", current, err)
+	}
+	mount, err := docker.Bind(physical, agent.PiJITICacheTarget, false)
+	if err != nil {
+		return docker.Mount{}, fmt.Errorf("mount Pi Jiti cache directory: %w", err)
 	}
 	return mount, nil
 }

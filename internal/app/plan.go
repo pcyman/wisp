@@ -75,6 +75,7 @@ type SandboxPlan struct {
 	AgentDataRoot       string
 	AgentDataMountIndex int
 	SharedPiProfile     bool
+	PiProfilePath       string
 	Environment         map[string]string
 	RuntimeDirectories  RuntimeDirectories
 	Warnings            []config.Warning
@@ -220,6 +221,7 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 		AgentDataRoot:       agentDataRoot,
 		AgentDataMountIndex: agentDataMountIndex,
 		SharedPiProfile:     sharedPiProfile,
+		PiProfilePath:       loaded.Config.Pi.ConfigPath,
 		Environment:         environment,
 		RuntimeDirectories:  directories,
 		Warnings:            append([]config.Warning(nil), loaded.Warnings...),

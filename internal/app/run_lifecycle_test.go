@@ -29,6 +29,7 @@ type lifecycleFake struct {
 	logOutput     func(process.Command) string
 	attachedError func(process.Command) error
 	cleanupError  func(process.Command) error
+	imageID       string
 }
 
 func (f *lifecycleFake) runner(t *testing.T) *recordingRunner {
@@ -58,7 +59,12 @@ func (f *lifecycleFake) runner(t *testing.T) *recordingRunner {
 			}
 			return nil, nil, nil
 		case len(command.Args) >= 2 && reflect.DeepEqual(command.Args[:2], []string{"image", "inspect"}):
-			return []byte("[]"), nil, nil
+			imageID := f.imageID
+			if imageID == "" {
+				imageID = "sha256:test-image"
+			}
+			value, err := json.Marshal([]any{map[string]any{"Id": imageID}})
+			return value, nil, err
 		case indexSlice(command.Args, []string{"up", "--detach", "--wait", "credentials"}) >= 0:
 			f.upCount++
 			if f.upError != nil {
@@ -162,8 +168,19 @@ func TestRunPiMountsSharedProfileAndProjectState(t *testing.T) {
 		t.Fatal(err)
 	}
 	fake := &lifecycleFake{}
-	application := newFixtureApp(t, root, fake.runner(t), &bytes.Buffer{}, &bytes.Buffer{})
+	var stderr bytes.Buffer
+	application := newFixtureApp(t, root, fake.runner(t), &bytes.Buffer{}, &stderr)
 	fake.attachedError = func(command process.Command) error {
+		wantCacheKey, err := piJITICacheKey("sha256:test-image")
+		if err != nil {
+			return err
+		}
+		if got := testEnvironmentValue(command.Env, "WISP_PI_JITI_CACHE_KEY"); got != wantCacheKey {
+			return fmt.Errorf("Pi Jiti cache key = %q, want %q", got, wantCacheKey)
+		}
+		if got := testEnvironmentValue(command.Env, "WISP_IMAGE"); got != "sha256:test-image" {
+			return fmt.Errorf("Pi sandbox image = %q, want immutable image ID", got)
+		}
 		runIndex := indexSlice(command.Args, []string{"run", "--rm"})
 		if runIndex < 2 {
 			return fmt.Errorf("run invocation not found: %v", command.Args)
@@ -189,7 +206,7 @@ func TestRunPiMountsSharedProfileAndProjectState(t *testing.T) {
 		if !reflect.DeepEqual(sandbox.Command, []string{"pi", "-e", "/usr/local/share/wisp/pi-agent-status.mjs"}) {
 			return fmt.Errorf("Pi command = %#v", sandbox.Command)
 		}
-		wantTargets := []string{"/workspace/current", "/run/wisp/pi/agent", "/run/wisp/pi/sessions", "/run/wisp/pi/agent/trust.json", "/run/wisp/agent/data", "/run/wisp/agent-status"}
+		wantTargets := []string{"/workspace/current", "/run/wisp/pi/agent", "/run/wisp/pi/sessions", "/run/wisp/pi/agent/trust.json", "/run/wisp/agent/data", "/run/wisp/agent-status", "/run/wisp/jiti-cache"}
 		if len(sandbox.Volumes) != len(wantTargets) {
 			return fmt.Errorf("Pi volumes = %s", data)
 		}
@@ -198,7 +215,7 @@ func TestRunPiMountsSharedProfileAndProjectState(t *testing.T) {
 				return fmt.Errorf("Pi volume %d = %#v", i, sandbox.Volumes[i])
 			}
 		}
-		metadataPath := filepath.Join(filepath.Dir(sandbox.Volumes[len(sandbox.Volumes)-1].Source), "metadata.json")
+		metadataPath := filepath.Join(filepath.Dir(sandbox.Volumes[5].Source), "metadata.json")
 		metadata, err := os.ReadFile(metadataPath)
 		if err != nil {
 			return err
@@ -214,7 +231,7 @@ func TestRunPiMountsSharedProfileAndProjectState(t *testing.T) {
 
 	status := application.Execute(context.Background(), cli.Request{Command: cli.CommandRun, Run: cli.RunRequest{Directory: projectDir, ConfigPath: configPath}})
 	if status != 0 {
-		t.Fatalf("status = %d", status)
+		t.Fatalf("status = %d, stderr = %q", status, stderr.String())
 	}
 }
 

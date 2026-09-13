@@ -85,6 +85,64 @@ func TestPrepareOpenCodeDataMountRejectsManagedSymlink(t *testing.T) {
 	}
 }
 
+func TestPiJITICacheKeyChangesWithImageIdentity(t *testing.T) {
+	first, err := piJITICacheKey("sha256:first")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := piJITICacheKey("sha256:second")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second || len(first) != 64 || len(second) != 64 {
+		t.Fatalf("Pi Jiti cache keys = %q and %q", first, second)
+	}
+}
+
+func TestPreparePiJITICacheMountScopesByProfile(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "cache", "wisp")
+	if err := os.MkdirAll(base, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	first, err := preparePiJITICacheMount(base, "/profiles/main", os.Getuid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	same, err := preparePiJITICacheMount(base, "/profiles/main", os.Getuid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherProfile, err := preparePiJITICacheMount(base, "/profiles/other", os.Getuid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Target != agent.PiJITICacheTarget || first.ReadOnly || first.Bind.CreateHostPath {
+		t.Fatalf("Pi Jiti cache mount = %#v", first)
+	}
+	if same.Source != first.Source || otherProfile.Source == first.Source {
+		t.Fatalf("cache scoping failed: first=%q same=%q profile=%q", first.Source, same.Source, otherProfile.Source)
+	}
+	runtimeKey, err := piJITICacheKey("sha256:runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := preparePiJITIRuntimeCache(first.Source, runtimeKey, os.Getuid()); err != nil {
+		t.Fatal(err)
+	}
+	if info, statErr := os.Lstat(filepath.Join(first.Source, runtimeKey)); statErr != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o700 {
+		t.Fatalf("runtime cache directory is not private and real: info=%v err=%v", info, statErr)
+	}
+	for current := first.Source; current != base; current = filepath.Dir(current) {
+		info, statErr := os.Stat(current)
+		if statErr != nil {
+			t.Fatal(statErr)
+		}
+		if info.Mode().Perm() != 0o700 {
+			t.Fatalf("mode of %q = %#o, want 0700", current, info.Mode().Perm())
+		}
+	}
+}
+
 func TestPreparePiDataMountsWithSharedProfile(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "data", "wisp")
 	mounts, err := preparePiDataMounts(root, "hash", os.Getuid(), true)

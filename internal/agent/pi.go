@@ -6,9 +6,10 @@ import (
 )
 
 const (
-	PiAgentTarget    = "/run/wisp/pi/agent"
-	PiSessionsTarget = "/run/wisp/pi/sessions"
-	PiTrustTarget    = PiAgentTarget + "/trust.json"
+	PiAgentTarget     = "/run/wisp/pi/agent"
+	PiSessionsTarget  = "/run/wisp/pi/sessions"
+	PiTrustTarget     = PiAgentTarget + "/trust.json"
+	PiJITICacheTarget = "/run/wisp/jiti-cache"
 )
 
 // Pi is Wisp's Pi agent-harness integration.

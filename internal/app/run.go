@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"wisp/internal/agentstatus"
@@ -75,6 +76,21 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 	if err != nil {
 		return 1, err
 	}
+	piJITICacheRoot := ""
+	if plan.AgentKey == "pi" {
+		profileIdentity := plan.PiProfilePath
+		if profileIdentity == "" {
+			profileIdentity = "project:" + plan.Project.Hash
+		}
+		cacheBase := filepath.Dir(filepath.Dir(assetRoot))
+		cacheMount, cacheErr := preparePiJITICacheMount(cacheBase, profileIdentity, plan.UID)
+		if cacheErr != nil {
+			return 1, cacheErr
+		}
+		sandboxMounts = append(sandboxMounts, cacheMount)
+		piJITICacheRoot = cacheMount.Source
+		a.recordStartupTiming("host.pi_jiti_cache.ready")
+	}
 	var brokerConfigSnapshot []byte
 	if plan.AWSEnabled {
 		brokerConfigSnapshot = plan.ConfigSnapshot
@@ -135,6 +151,25 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 		return 1, a.redact(err, plan.Environment)
 	}
 	a.recordStartupTiming("host.images.ready")
+	if plan.AgentKey == "pi" {
+		imageID, inspectErr := a.docker.InspectImageID(ctx, plan.Images.Sandbox)
+		if inspectErr != nil {
+			return 1, inspectErr
+		}
+		cacheKey, cacheErr := piJITICacheKey(imageID)
+		if cacheErr != nil {
+			return 1, cacheErr
+		}
+		if cacheErr := preparePiJITIRuntimeCache(piJITICacheRoot, cacheKey, plan.UID); cacheErr != nil {
+			return 1, cacheErr
+		}
+		// Pin Compose to the inspected immutable image so a concurrent rebuild
+		// cannot retag the service between cache selection and container creation.
+		plan.Environment["WISP_IMAGE"] = imageID
+		plan.Environment["WISP_PI_JITI_CACHE_KEY"] = cacheKey
+		invocation.Environment = a.childEnvironment(plan.Environment)
+		a.recordStartupTiming("host.pi_jiti_cache.keyed")
+	}
 
 	composeStarted := false
 	defer func() {

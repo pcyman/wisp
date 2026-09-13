@@ -100,7 +100,8 @@ the profile under source control or otherwise review it as appropriate. Pi
 sessions and trust decisions remain Wisp-managed and project-scoped, avoiding
 collisions caused by every sandbox project appearing internally under the same
 workspace path. When no host Pi profile exists, Wisp uses project-local Pi
-state instead.
+state instead. See [`docs/pi-jiti-cache.md`](docs/pi-jiti-cache.md) for the
+shared compiled-extension cache design and its development constraints.
 
 ## Usage
 

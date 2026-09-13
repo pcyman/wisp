@@ -25,6 +25,14 @@ func TestImageExists(t *testing.T) {
 	}
 }
 
+func TestInspectImageID(t *testing.T) {
+	runner := &fakeRunner{captureResults: []fakeResult{{stdout: `[{"Id":"sha256:abc"}]`}}}
+	imageID, err := NewClient(runner).InspectImageID(context.Background(), "wisp:local")
+	if err != nil || imageID != "sha256:abc" {
+		t.Fatalf("image ID = %q, %v", imageID, err)
+	}
+}
+
 func TestInspectContainerAndLabels(t *testing.T) {
 	runner := &fakeRunner{captureResults: []fakeResult{{stdout: `[{
       "Id":"abc", "Name":"/wisp-project",

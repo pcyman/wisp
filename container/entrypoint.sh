@@ -23,6 +23,19 @@ if [ -f /run/wisp/hunk/config.toml ]; then
     ln -s -- /run/wisp/hunk/config.toml "${HOME}/.config/hunk/config.toml"
 fi
 
+if [ -d /run/wisp/jiti-cache ]; then
+    if [[ ! "${WISP_PI_JITI_CACHE_KEY:-}" =~ ^[0-9a-f]{64}$ ]]; then
+        echo "error: invalid Pi Jiti cache key" >&2
+        exit 2
+    fi
+    jiti_cache="/run/wisp/jiti-cache/${WISP_PI_JITI_CACHE_KEY}"
+    if [ ! -d "${jiti_cache}" ] || [ -L "${jiti_cache}" ]; then
+        echo "error: invalid Pi Jiti cache directory" >&2
+        exit 2
+    fi
+    ln -s -- "${jiti_cache}" "${TMPDIR}/jiti"
+fi
+
 startup_timing container.setup.ready
 
 if [ -n "${AWS_CONTAINER_CREDENTIALS_FULL_URI:-}" ]; then

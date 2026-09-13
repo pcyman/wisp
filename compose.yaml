@@ -68,6 +68,7 @@ services:
       PI_CODING_AGENT_DIR: /run/wisp/pi/agent
       PI_CODING_AGENT_SESSION_DIR: /run/wisp/pi/sessions
       PI_TIMING: ${WISP_STARTUP_TIMING:-}
+      WISP_PI_JITI_CACHE_KEY: ${WISP_PI_JITI_CACHE_KEY:-}
       WISP_STARTUP_TIMING: ${WISP_STARTUP_TIMING:-}
       TERM: ${TERM:-}
       COLORTERM: ${COLORTERM:-}
