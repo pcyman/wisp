@@ -17,6 +17,7 @@ RUN apt-get update \
         bash \
         ca-certificates \
         curl \
+        fd-find \
         gcc \
         git \
         gzip \
@@ -27,6 +28,8 @@ RUN apt-get update \
         ripgrep \
         unzip \
         xz-utils \
+    && ln -s /usr/bin/fdfind /usr/local/bin/fd \
+    && fd --version \
     && rm -rf /var/lib/apt/lists/*
 
 # Pi requires Node >=22.19. Install the official architecture-specific runtime

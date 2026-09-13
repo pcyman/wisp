@@ -2,9 +2,18 @@ import { mkdir, rename, unlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { dirname } from "node:path";
 
+function startupTiming(event) {
+  if (process.env.WISP_STARTUP_TIMING === "1") {
+    console.error(`[wisp startup] ${new Date().toISOString()} ${event}`);
+  }
+}
+
+startupTiming("pi.status_extension.module_loaded");
+
 // Pi v0.85.1 public extension events provide conservative busy/settled
 // boundaries. Reporter output is advisory; Wisp verifies container liveness.
 export default function wispAgentStatus(pi) {
+  startupTiming("pi.status_extension.factory");
   const path = process.env.WISP_AGENT_STATUS_PATH || "/run/wisp/agent-status/agent.json";
   let busy = false;
   let promptDepth = 0;
@@ -34,6 +43,7 @@ export default function wispAgentStatus(pi) {
 
   void enqueue({ state: "idle" });
   pi.on("session_start", () => {
+    startupTiming("pi.session_start");
     busy = false;
     promptDepth = 0;
     return enqueue({ state: "idle" });

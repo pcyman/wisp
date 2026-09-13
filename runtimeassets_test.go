@@ -8,12 +8,12 @@ import (
 
 func TestStatusReporterPackaging(t *testing.T) {
 	for path, required := range map[string]string{
-		"container/agent-status.js": "export const AgentStatusPlugin",
+		"container/agent-status.js":     "export const AgentStatusPlugin",
 		"container/pi-agent-status.mjs": "agent_settled",
-		".dockerignore":             "!container/agent-status.js",
-		"Dockerfile":                "COPY --chmod=0644 container/agent-status.js /usr/local/share/wisp/agent-status.js",
-		"container/entrypoint.sh":   "export OPENCODE_CONFIG=/usr/local/share/wisp/opencode.json",
-		"compose.yaml":              "wisp.run-id: \"${WISP_RUN_ID:-}\"",
+		".dockerignore":                 "!container/agent-status.js",
+		"Dockerfile":                    "COPY --chmod=0644 container/agent-status.js /usr/local/share/wisp/agent-status.js",
+		"container/entrypoint.sh":       "export OPENCODE_CONFIG=/usr/local/share/wisp/opencode.json",
+		"compose.yaml":                  "wisp.run-id: \"${WISP_RUN_ID:-}\"",
 	} {
 		data, err := RuntimeAssets.ReadFile(path)
 		if err != nil {
@@ -26,6 +26,22 @@ func TestStatusReporterPackaging(t *testing.T) {
 	ignore, err := RuntimeAssets.ReadFile(".dockerignore")
 	if err != nil || !strings.Contains(string(ignore), "!container/pi-agent-status.mjs") {
 		t.Fatalf("Pi reporter is excluded from image context: %v", err)
+	}
+}
+
+func TestStartupTimingInstrumentationIsPackaged(t *testing.T) {
+	for path, required := range map[string]string{
+		"compose.yaml":                  "PI_TIMING: ${WISP_STARTUP_TIMING:-}",
+		"container/entrypoint.sh":       "startup_timing container.exec",
+		"container/pi-agent-status.mjs": "pi.session_start",
+	} {
+		data, err := RuntimeAssets.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), required) {
+			t.Errorf("%s missing startup timing integration %q", path, required)
+		}
 	}
 }
 
@@ -79,6 +95,8 @@ func TestSandboxComposeHardening(t *testing.T) {
 	sandbox := compose[index+len(marker):]
 	for _, required := range []string{
 		"      TMPDIR: /run/wisp/tmp\n",
+		"      PI_TIMING: ${WISP_STARTUP_TIMING:-}\n",
+		"      WISP_STARTUP_TIMING: ${WISP_STARTUP_TIMING:-}\n",
 		"      XDG_DATA_HOME: /run/wisp/agent/data\n",
 		"      PI_CODING_AGENT_DIR: /run/wisp/pi/agent\n",
 		"      PI_CODING_AGENT_SESSION_DIR: /run/wisp/pi/sessions\n",

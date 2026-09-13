@@ -118,21 +118,29 @@ func (a *App) Execute(ctx context.Context, request cli.Request) int {
 	return status
 }
 
-func hostEnvironment(values []string) HostEnvironment {
-	lookup := func(name string) string {
-		prefix := name + "="
-		for i := len(values) - 1; i >= 0; i-- {
-			if strings.HasPrefix(values[i], prefix) {
-				return strings.TrimPrefix(values[i], prefix)
-			}
+func environmentValue(environment []string, name string) string {
+	prefix := name + "="
+	for i := len(environment) - 1; i >= 0; i-- {
+		if strings.HasPrefix(environment[i], prefix) {
+			return strings.TrimPrefix(environment[i], prefix)
 		}
-		return ""
 	}
+	return ""
+}
+
+func hostEnvironment(values []string) HostEnvironment {
 	return HostEnvironment{
-		Home: lookup("HOME"), XDGConfigHome: lookup("XDG_CONFIG_HOME"), XDGDataHome: lookup("XDG_DATA_HOME"),
-		XDGCacheHome: lookup("XDG_CACHE_HOME"), XDGRuntimeDir: lookup("XDG_RUNTIME_DIR"),
-		TempDir: lookup("TMPDIR"), Term: lookup("TERM"), ColorTerm: lookup("COLORTERM"),
+		Home: environmentValue(values, "HOME"), XDGConfigHome: environmentValue(values, "XDG_CONFIG_HOME"), XDGDataHome: environmentValue(values, "XDG_DATA_HOME"),
+		XDGCacheHome: environmentValue(values, "XDG_CACHE_HOME"), XDGRuntimeDir: environmentValue(values, "XDG_RUNTIME_DIR"),
+		TempDir: environmentValue(values, "TMPDIR"), Term: environmentValue(values, "TERM"), ColorTerm: environmentValue(values, "COLORTERM"),
 	}
+}
+
+func (a *App) recordStartupTiming(event string) {
+	if environmentValue(a.deps.Environment, "WISP_STARTUP_TIMING") != "1" {
+		return
+	}
+	fmt.Fprintf(a.deps.Stderr, "[wisp startup] %s %s\n", time.Now().UTC().Format(time.RFC3339Nano), event)
 }
 
 func (a *App) planOptions() PlanOptions {

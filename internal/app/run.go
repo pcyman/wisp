@@ -16,10 +16,12 @@ import (
 )
 
 func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resultErr error) {
+	a.recordStartupTiming("host.run.start")
 	plan, err := PlanRun(ctx, request, a.planOptions())
 	if err != nil {
 		return 1, err
 	}
+	a.recordStartupTiming("host.plan.ready")
 	for _, warning := range plan.Warnings {
 		fmt.Fprintf(a.deps.Stderr, "warning: %s\n", warning)
 	}
@@ -94,6 +96,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 		status, resultErr = cleanupResult(status, resultErr, files.Cleanup(), a.deps.Stderr)
 	}()
 
+	a.recordStartupTiming("host.runtime.ready")
 	invocation := docker.ComposeInvocation{ProjectName: plan.Project.ComposeProject, RuntimeRoot: assetRoot, Override: files.OverridePath}
 	if _, err := a.docker.CheckPrerequisites(ctx); err != nil {
 		return 1, err
@@ -124,12 +127,14 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 	if plan.AWSEnabled {
 		images = append(images, docker.Image{Service: "credentials", Name: plan.Images.Credentials})
 	}
+	a.recordStartupTiming("host.prerequisites.ready")
 	if _, err := a.docker.EnsureImages(ctx, docker.BuildRequest{
 		Invocation: invocation, LockRoot: runtimeRoot, UID: plan.UID, CPUs: plan.BuildCPUs, Rebuild: plan.Rebuild,
 		Images: images,
 	}); err != nil {
 		return 1, a.redact(err, plan.Environment)
 	}
+	a.recordStartupTiming("host.images.ready")
 
 	composeStarted := false
 	defer func() {
@@ -144,6 +149,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 
 	if plan.AWSEnabled {
 		fmt.Fprintln(a.deps.Stderr, "Starting AWS credential broker...")
+		a.recordStartupTiming("host.credentials.start")
 		composeStarted = true
 		if _, _, err := a.docker.ComposeCapture(ctx, invocation, "up", "--detach", "--wait", "credentials"); err != nil {
 			logCtx, cancel := context.WithTimeout(context.Background(), a.deps.CleanupTimeout)
@@ -154,6 +160,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 			}
 			return 1, a.redact(fmt.Errorf("start AWS credential broker: %w; verify the configured or default AWS credential source", err), plan.Environment)
 		}
+		a.recordStartupTiming("host.credentials.ready")
 	}
 
 	fmt.Fprintf(a.deps.Stderr, "Starting %s...\n", plan.AgentName)
@@ -163,7 +170,9 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 		args = append(args, "--no-TTY")
 	}
 	args = append(args, "sandbox")
+	a.recordStartupTiming("host.sandbox.run")
 	err = a.docker.ComposeAttachedIO(ctx, invocation, a.deps.Stdin, a.deps.Stdout, a.deps.Stderr, args...)
+	a.recordStartupTiming("host.sandbox.exit")
 	if err != nil {
 		return process.ExitCode(err, signalStatus(ctx, 1)), a.redact(err, plan.Environment)
 	}

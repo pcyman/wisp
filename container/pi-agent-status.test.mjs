@@ -6,6 +6,33 @@ import test from "node:test";
 
 import statusExtension from "./pi-agent-status.mjs";
 
+test("Pi reporter emits opt-in startup timing markers", async () => {
+  const root = await mkdtemp(join(tmpdir(), "wisp-pi-timing-"));
+  const previousPath = process.env.WISP_AGENT_STATUS_PATH;
+  const previousTiming = process.env.WISP_STARTUP_TIMING;
+  const previousError = console.error;
+  const messages = [];
+  process.env.WISP_AGENT_STATUS_PATH = join(root, "agent.json");
+  process.env.WISP_STARTUP_TIMING = "1";
+  console.error = (...args) => messages.push(args.join(" "));
+  const handlers = new Map();
+  try {
+    const timingExtension = (await import(`./pi-agent-status.mjs?timing-test=${Date.now()}`)).default;
+    timingExtension({ on(name, handler) { handlers.set(name, handler); } });
+    await handlers.get("session_start")({});
+    assert.ok(messages.some((message) => message.includes("pi.status_extension.module_loaded")));
+    assert.ok(messages.some((message) => message.includes("pi.status_extension.factory")));
+    assert.ok(messages.some((message) => message.includes("pi.session_start")));
+  } finally {
+    console.error = previousError;
+    if (previousPath === undefined) delete process.env.WISP_AGENT_STATUS_PATH;
+    else process.env.WISP_AGENT_STATUS_PATH = previousPath;
+    if (previousTiming === undefined) delete process.env.WISP_STARTUP_TIMING;
+    else process.env.WISP_STARTUP_TIMING = previousTiming;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("Pi reporter follows busy, prompt, and settled boundaries", async () => {
   const root = await mkdtemp(join(tmpdir(), "wisp-pi-status-"));
   const statusPath = join(root, "status", "agent.json");

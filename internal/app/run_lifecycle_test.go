@@ -102,9 +102,13 @@ func TestRunWithoutAWSDoesNotStartBrokerOrGenerateToken(t *testing.T) {
 	var stderr bytes.Buffer
 	fake := &lifecycleFake{}
 	application := newFixtureApp(t, root, fake.runner(t), &bytes.Buffer{}, &stderr)
+	application.deps.Environment = append(application.deps.Environment, "WISP_STARTUP_TIMING=1")
 	randomReads := 0
 	application.deps.Random = observingReader{Reader: bytes.NewReader(make([]byte, 32)), observed: func() { randomReads++ }}
 	fake.attachedError = func(command process.Command) error {
+		if testEnvironmentValue(command.Env, "WISP_STARTUP_TIMING") != "1" {
+			return errors.New("startup timing environment did not reach Compose")
+		}
 		if testEnvironmentValue(command.Env, "WISP_AWS_AUTHORIZATION_TOKEN") != "" || testEnvironmentValue(command.Env, "WISP_AWS_ALIAS") != "" {
 			return errors.New("AWS environment reached disabled run")
 		}
@@ -138,6 +142,11 @@ func TestRunWithoutAWSDoesNotStartBrokerOrGenerateToken(t *testing.T) {
 	status := application.Execute(context.Background(), cli.Request{Command: cli.CommandRun, Run: cli.RunRequest{Directory: projectDir, ConfigPath: configPath}})
 	if status != 0 || fake.upCount != 0 || randomReads != 0 || strings.Contains(stderr.String(), "credential broker") {
 		t.Fatalf("status=%d broker starts=%d random reads=%d stderr=%q", status, fake.upCount, randomReads, stderr.String())
+	}
+	for _, marker := range []string{"host.run.start", "host.sandbox.run", "host.sandbox.exit"} {
+		if !strings.Contains(stderr.String(), "[wisp startup]") || !strings.Contains(stderr.String(), marker) {
+			t.Errorf("startup timing output missing %q: %q", marker, stderr.String())
+		}
 	}
 }
 

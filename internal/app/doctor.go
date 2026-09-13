@@ -362,13 +362,3 @@ func checkDirectory(report *doctorReporter, name, path string, uid int) {
 	}
 	report.line("PASS", name, path)
 }
-
-func environmentValue(environment []string, name string) string {
-	prefix := name + "="
-	for i := len(environment) - 1; i >= 0; i-- {
-		if strings.HasPrefix(environment[i], prefix) {
-			return strings.TrimPrefix(environment[i], prefix)
-		}
-	}
-	return ""
-}

@@ -67,6 +67,8 @@ services:
       XDG_DATA_HOME: /run/wisp/agent/data
       PI_CODING_AGENT_DIR: /run/wisp/pi/agent
       PI_CODING_AGENT_SESSION_DIR: /run/wisp/pi/sessions
+      PI_TIMING: ${WISP_STARTUP_TIMING:-}
+      WISP_STARTUP_TIMING: ${WISP_STARTUP_TIMING:-}
       TERM: ${TERM:-}
       COLORTERM: ${COLORTERM:-}
     labels:

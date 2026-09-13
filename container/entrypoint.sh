@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+startup_timing() {
+    if [ "${WISP_STARTUP_TIMING:-}" = "1" ]; then
+        printf '[wisp startup] %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)" "$1" >&2
+    fi
+}
+
+startup_timing container.entrypoint.start
+
 if [ -d /run/wisp/opencode/config ]; then
     mkdir -p -- "${HOME}/.config"
     ln -s -- /run/wisp/opencode/config "${HOME}/.config/opencode"
@@ -14,6 +22,8 @@ if [ -f /run/wisp/hunk/config.toml ]; then
     mkdir -p -- "${HOME}/.config/hunk"
     ln -s -- /run/wisp/hunk/config.toml "${HOME}/.config/hunk/config.toml"
 fi
+
+startup_timing container.setup.ready
 
 if [ -n "${AWS_CONTAINER_CREDENTIALS_FULL_URI:-}" ]; then
     aws_configuration="$(
@@ -41,9 +51,12 @@ if [ -n "${AWS_CONTAINER_CREDENTIALS_FULL_URI:-}" ]; then
     fi
 fi
 
+startup_timing container.bootstrap.ready
+
 if (($# == 0)); then
     echo "error: sandbox command is not configured" >&2
     exit 2
 fi
 
+startup_timing container.exec
 exec "$@"
