@@ -279,10 +279,18 @@ func TestPlanRunSelectsPiWithSharedProfile(t *testing.T) {
 	home := filepath.Join(root, "home")
 	projectDir := filepath.Join(root, "project")
 	piDir := filepath.Join(home, ".pi", "agent")
-	for _, dir := range []string{projectDir, piDir} {
+	mcpDir := filepath.Join(home, ".config", "mcp")
+	for _, dir := range []string{projectDir, piDir, mcpDir} {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			t.Fatal(err)
 		}
+	}
+	mcpConfig := filepath.Join(root, "physical-mcp.json")
+	if err := os.WriteFile(mcpConfig, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(mcpConfig, filepath.Join(mcpDir, "mcp.json")); err != nil {
+		t.Fatal(err)
 	}
 	configPath := filepath.Join(root, "config.toml")
 	if err := os.WriteFile(configPath, []byte("schema_version = 1\n[agent]\ndefault = \"pi\"\n"), 0o600); err != nil {
@@ -303,8 +311,11 @@ func TestPlanRunSelectsPiWithSharedProfile(t *testing.T) {
 	if !reflect.DeepEqual(plan.Command, []string{"pi", "-e", "/usr/local/share/wisp/pi-agent-status.mjs"}) {
 		t.Fatalf("Pi command = %#v", plan.Command)
 	}
-	if len(plan.Mounts) < 2 || plan.Mounts[1].Source != piDir || plan.Mounts[1].Target != "/run/wisp/pi/agent" || plan.Mounts[1].ReadOnly {
+	if len(plan.Mounts) < 3 || plan.Mounts[1].Source != piDir || plan.Mounts[1].Target != "/run/wisp/pi/agent" || plan.Mounts[1].ReadOnly {
 		t.Fatalf("Pi profile mount = %#v", plan.Mounts)
+	}
+	if plan.Mounts[2].Source != mcpConfig || plan.Mounts[2].Target != "/run/wisp/mcp/mcp.json" || !plan.Mounts[2].ReadOnly {
+		t.Fatalf("Pi MCP config mount = %#v", plan.Mounts[2])
 	}
 	if plan.AgentDataMountIndex != 2 {
 		t.Fatalf("Pi data insertion index = %d", plan.AgentDataMountIndex)

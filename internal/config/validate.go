@@ -382,6 +382,15 @@ func validateHostPaths(cfg *Config, configPath string, env Environment, validate
 			}
 		}
 	}
+	if validatePi && filepath.IsAbs(env.Home) {
+		candidate := filepath.Join(env.Home, ".config", "mcp", "mcp.json")
+		physical, pathErr := requirePath(candidate, pathRegularFile)
+		if pathErr == nil {
+			cfg.Pi.MCPConfigPath = physical
+		} else if !errors.Is(pathErr, os.ErrNotExist) {
+			return nil, fmt.Errorf("Pi MCP config path %q: %w", candidate, pathErr)
+		}
+	}
 
 	configBase, err := xdgBase(env.XDGConfigHome, env.Home, ".config", "XDG_CONFIG_HOME")
 	if err != nil {

@@ -23,6 +23,11 @@ if [ -f /run/wisp/hunk/config.toml ]; then
     ln -s -- /run/wisp/hunk/config.toml "${HOME}/.config/hunk/config.toml"
 fi
 
+if [ -f /run/wisp/mcp/mcp.json ]; then
+    mkdir -p -- "${HOME}/.config/mcp"
+    ln -s -- /run/wisp/mcp/mcp.json "${HOME}/.config/mcp/mcp.json"
+fi
+
 if [ -d /run/wisp/jiti-cache ]; then
     if [[ ! "${WISP_PI_JITI_CACHE_KEY:-}" =~ ^[0-9a-f]{64}$ ]]; then
         echo "error: invalid Pi Jiti cache key" >&2

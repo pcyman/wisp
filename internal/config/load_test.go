@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestLoadResolvesPhysicalPathsAndWarnings(t *testing.T) {
@@ -115,6 +117,46 @@ func TestLoadForRunValidatesOnlySelectedAgentPaths(t *testing.T) {
 			}
 			if _, err := Load(configPath, Environment{Home: root}); err == nil {
 				t.Fatal("full config validation accepted missing path")
+			}
+		})
+	}
+}
+
+func TestLoadForRunPiMCPConfigIsOptionalAndMustBeRegular(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		setup func(string) error
+	}{
+		{name: "absent", setup: func(string) error { return nil }},
+		{name: "directory", setup: func(path string) error { return os.Mkdir(path, 0o700) }},
+		{name: "FIFO", setup: func(path string) error { return unix.Mkfifo(path, 0o600) }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			mcpDir := filepath.Join(root, ".config", "mcp")
+			if err := os.MkdirAll(mcpDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := test.setup(filepath.Join(mcpDir, "mcp.json")); err != nil {
+				t.Fatal(err)
+			}
+			configPath := filepath.Join(root, "config.toml")
+			if err := os.WriteFile(configPath, []byte("schema_version = 1\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := LoadForRun(configPath, Environment{Home: root}, "pi")
+			if test.name == "absent" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if result.Config.Pi.MCPConfigPath != "" {
+					t.Fatalf("Pi MCP config path = %q, want omitted", result.Config.Pi.MCPConfigPath)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), "Pi MCP config path") || !strings.Contains(err.Error(), "not a regular file") {
+				t.Fatalf("LoadForRun() error = %v, want non-regular Pi MCP config error", err)
 			}
 		})
 	}
