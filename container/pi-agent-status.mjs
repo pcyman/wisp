@@ -10,8 +10,8 @@ function startupTiming(event) {
 
 startupTiming("pi.status_extension.module_loaded");
 
-// Pi v0.85.1 public extension events provide conservative busy/settled
-// boundaries. Reporter output is advisory; Wisp verifies container liveness.
+// Pi's public extension events provide conservative busy/settled boundaries.
+// Reporter output is advisory; Wisp verifies container liveness.
 export default function wispAgentStatus(pi) {
   startupTiming("pi.status_extension.factory");
   const path = process.env.WISP_AGENT_STATUS_PATH || "/run/wisp/agent-status/agent.json";

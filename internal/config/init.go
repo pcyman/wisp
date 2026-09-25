@@ -18,7 +18,7 @@ cpus = 4
 
 [build.versions]
 opencode = ""
-pi = "0.85.1"
+pi = ""
 hunk = ""
 aws_cli = ""
 kubectl = ""

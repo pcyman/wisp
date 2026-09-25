@@ -6,7 +6,6 @@ const (
 	DefaultCredentialsImage = "wisp-credentials:local"
 	DefaultBuildCPUs        = 4
 	DefaultBoto3Version     = "1.35.99"
-	DefaultPiVersion        = "0.85.1"
 	DefaultAWSDuration      = 3600
 	InitReminder            = "AWS access is disabled until an [aws] table and alias are configured"
 )

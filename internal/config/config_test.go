@@ -69,7 +69,7 @@ func TestResolveDefaults(t *testing.T) {
 	if cfg.Build.CPUs != DefaultBuildCPUs || cfg.Build.Versions.Boto3 != DefaultBoto3Version {
 		t.Fatalf("build defaults = %#v", cfg.Build)
 	}
-	if cfg.Agent.Default != "opencode" || cfg.Build.Versions.Pi != DefaultPiVersion {
+	if cfg.Agent.Default != "opencode" || cfg.Build.Versions.OpenCode != "" || cfg.Build.Versions.Pi != "" {
 		t.Fatalf("agent defaults = %#v, versions = %#v", cfg.Agent, cfg.Build.Versions)
 	}
 	if cfg.AWS.Aliases["only"].DurationSeconds != DefaultAWSDuration {
@@ -92,7 +92,6 @@ func TestResolveRejectsInvalidValues(t *testing.T) {
 		{name: "empty image", toml: "schema_version = 1\n[images]\nsandbox = \"\"\n" + validAliasTOML, wantErr: "images.sandbox"},
 		{name: "zero cpus", toml: "schema_version = 1\n[build]\ncpus = 0\n" + validAliasTOML, wantErr: "build.cpus"},
 		{name: "empty boto3", toml: "schema_version = 1\n[build.versions]\nboto3 = \"\"\n" + validAliasTOML, wantErr: "boto3"},
-		{name: "empty pi version", toml: "schema_version = 1\n[build.versions]\npi = \"\"\n" + validAliasTOML, wantErr: "versions.pi"},
 		{name: "unknown agent", toml: "schema_version = 1\n[agent]\ndefault = \"claude\"\n" + validAliasTOML, wantErr: "agent.default"},
 		{name: "no aliases", toml: "schema_version = 1\n[aws]\n", wantErr: "at least one alias"},
 		{name: "bad alias name", toml: "schema_version = 1\n[aws.aliases.'bad name']\nprofile = \"p\"\nrole_arn = \"arn:r\"\n", wantErr: "alias name"},

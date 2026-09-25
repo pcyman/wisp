@@ -2,7 +2,7 @@ FROM debian:bookworm-slim
 
 ARG TARGETARCH
 ARG OPENCODE_VERSION=""
-ARG PI_VERSION="0.85.1"
+ARG PI_VERSION=""
 ARG HUNK_VERSION=""
 ARG AWS_CLI_VERSION=""
 ARG KUBECTL_VERSION=""
@@ -65,9 +65,13 @@ RUN set -eux; \
     install -m 0755 /tmp/opencode-home/.opencode/bin/opencode /usr/local/bin/opencode; \
     rm -rf /tmp/install-opencode /tmp/opencode-home
 
+# npm installs the latest Pi release unless PI_VERSION pins a specific version.
 RUN set -eux; \
-    test -n "${PI_VERSION}"; \
-    npm install --global --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}"; \
+    if [ -n "${PI_VERSION}" ]; then \
+        npm install --global --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}"; \
+    else \
+        npm install --global --ignore-scripts "@earendil-works/pi-coding-agent"; \
+    fi; \
     HOME=/tmp/pi-home PI_SKIP_VERSION_CHECK=1 pi --version; \
     rm -rf /tmp/pi-home; \
     npm cache clean --force

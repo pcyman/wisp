@@ -39,7 +39,7 @@ func Resolve(raw RawConfig) (Config, error) {
 		},
 		Build: BuildConfig{
 			CPUs:     DefaultBuildCPUs,
-			Versions: VersionConfig{Pi: DefaultPiVersion, Boto3: DefaultBoto3Version},
+			Versions: VersionConfig{Boto3: DefaultBoto3Version},
 		},
 		Agent: AgentConfig{Default: "opencode"},
 		AWS:   AWSConfig{Aliases: make(map[string]AWSAliasConfig)},
@@ -79,9 +79,6 @@ func Resolve(raw RawConfig) (Config, error) {
 	}
 	if strings.TrimSpace(cfg.Build.Versions.Boto3) == "" {
 		return Config{}, errors.New("build.versions.boto3 must not be empty")
-	}
-	if strings.TrimSpace(cfg.Build.Versions.Pi) == "" {
-		return Config{}, errors.New("build.versions.pi must not be empty")
 	}
 
 	if raw.Agent != nil && raw.Agent.Default != nil {

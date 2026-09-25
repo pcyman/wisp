@@ -51,7 +51,7 @@ services:
       context: .
       args:
         OPENCODE_VERSION: ${OPENCODE_VERSION:-}
-        PI_VERSION: ${PI_VERSION:-0.85.1}
+        PI_VERSION: ${PI_VERSION:-}
         HUNK_VERSION: ${HUNK_VERSION:-}
         AWS_CLI_VERSION: ${AWS_CLI_VERSION:-}
         KUBECTL_VERSION: ${KUBECTL_VERSION:-}
