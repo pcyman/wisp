@@ -95,7 +95,11 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 	if plan.AWSEnabled {
 		brokerConfigSnapshot = plan.ConfigSnapshot
 	}
-	files, err := docker.CreateInvocationFiles(runtimeRoot, brokerConfigSnapshot, func(snapshot string) (docker.Override, error) {
+	files, err := docker.CreateInvocationFiles(runtimeRoot, brokerConfigSnapshot, func(invocationDir, snapshot string) (docker.Override, error) {
+		gitMounts, gitErr := plan.LinkedWorktree.mounts(invocationDir)
+		if gitErr != nil {
+			return docker.Override{}, gitErr
+		}
 		var credentials []docker.Mount
 		if plan.AWSEnabled {
 			credentials, err = docker.CredentialsMounts(snapshot, plan.AWSConfigPath, plan.AWSCredentialsPath, plan.AWSSSOCachePath)
@@ -103,7 +107,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 				return docker.Override{}, err
 			}
 		}
-		return docker.NewRunOverride(plan.Command, credentials, sandboxMounts)
+		return docker.NewRunOverride(plan.Command, credentials, append(sandboxMounts, gitMounts...))
 	})
 	if err != nil {
 		return 1, err

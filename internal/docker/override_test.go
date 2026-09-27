@@ -97,7 +97,7 @@ func TestRunOverrideEnablesAWSOnlyWithCredentialMounts(t *testing.T) {
 
 func TestCreateInvocationUsesFinalSnapshotPath(t *testing.T) {
 	root := t.TempDir()
-	files, err := CreateInvocationFiles(root, []byte("validated"), func(configPath string) (Override, error) {
+	files, err := CreateInvocationFiles(root, []byte("validated"), func(_, configPath string) (Override, error) {
 		mounts, mountErr := CredentialsMounts(configPath, "/host/aws/config", "", "/host/aws/sso/cache")
 		if mountErr != nil {
 			return Override{}, mountErr

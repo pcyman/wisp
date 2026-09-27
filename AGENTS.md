@@ -1,14 +1,14 @@
 # Wisp contributor notes
 
-Wisp is a Go CLI that runs OpenCode in a Docker Compose sandbox. AWS access is
-always provided by the Python credential broker; Docker is invoked through the
-CLI rather than an SDK.
+Wisp is a Go CLI that runs OpenCode or Pi in a Docker Compose sandbox. AWS
+access is always provided by the Python credential broker; Docker is invoked
+through the CLI rather than an SDK.
 
 ## Code map
 
 - `cmd/wisp`: executable wiring
 - `internal/cli`: argument parsing and help
-- `internal/app`: planning and command lifecycles
+- `internal/app`: planning, command lifecycles, and linked-worktree Git mounts
 - `internal/config`, `project`, `mount`: host-input validation
 - `internal/docker`, `process`, `lock`: Docker commands, subprocesses, locks
 - `internal/runtimeassets`: embedded asset materialization
@@ -31,6 +31,11 @@ CLI rather than an SDK.
   or environment dumps that may contain them.
 - Resolve bind sources physically, disable implicit host-path creation, and
   reject mount collisions.
+- Identify projects by the physical Git worktree root, not the shared Git
+  directory. For linked worktrees, validate Git metadata before Docker, mount
+  the shared Git directory writable (not the whole main checkout), and overlay
+  container-specific pointers without modifying host Git files. Do not set
+  `GIT_DIR` globally: other mounted repositories must retain normal discovery.
 - Verify Wisp ownership labels before entering or deleting containers.
 - Preserve child exit status when cleanup also fails, and clean detached
   Compose resources on normal and interrupted exits.
@@ -75,4 +80,6 @@ git diff --check
 ```
 
 When Docker is available, validate Compose and build both images using
-non-secret placeholder values for its required interpolation variables.
+non-secret placeholder values for its required interpolation variables. For
+linked-worktree changes, also exercise `git status`, `add`, and `commit` inside
+an actual sandbox. See `docs/git-worktrees.md` for scope and limitations.

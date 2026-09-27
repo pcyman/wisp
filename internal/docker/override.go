@@ -119,8 +119,9 @@ func CredentialsMounts(configSnapshot, awsConfig, awsCredentials, ssoCache strin
 }
 
 // CreateInvocationFiles creates the private directory and snapshot before
-// asking buildOverride to construct an override using the final snapshot path.
-func CreateInvocationFiles(runtimeRoot string, configSnapshot []byte, buildOverride func(configPath string) (Override, error)) (InvocationFiles, error) {
+// asking buildOverride to construct an override using the invocation directory
+// and final snapshot path (empty when no snapshot was requested).
+func CreateInvocationFiles(runtimeRoot string, configSnapshot []byte, buildOverride func(invocationDir, configPath string) (Override, error)) (InvocationFiles, error) {
 	if !filepath.IsAbs(runtimeRoot) {
 		return InvocationFiles{}, fmt.Errorf("runtime root %q is not absolute", runtimeRoot)
 	}
@@ -145,7 +146,7 @@ func CreateInvocationFiles(runtimeRoot string, configSnapshot []byte, buildOverr
 			return cleanup(err)
 		}
 	}
-	override, err := buildOverride(files.ConfigPath)
+	override, err := buildOverride(files.Dir, files.ConfigPath)
 	if err != nil {
 		return cleanup(fmt.Errorf("build Compose override: %w", err))
 	}
@@ -163,7 +164,7 @@ func CreateInvocationFiles(runtimeRoot string, configSnapshot []byte, buildOverr
 // WriteInvocationFiles securely writes structured JSON (valid Compose YAML)
 // and, when non-nil, the exact validated config snapshot.
 func WriteInvocationFiles(runtimeRoot string, override Override, configSnapshot []byte) (InvocationFiles, error) {
-	return CreateInvocationFiles(runtimeRoot, configSnapshot, func(string) (Override, error) {
+	return CreateInvocationFiles(runtimeRoot, configSnapshot, func(string, string) (Override, error) {
 		return override, nil
 	})
 }

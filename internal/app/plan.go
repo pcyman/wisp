@@ -55,6 +55,7 @@ type RuntimeDirectories struct {
 // Callers should treat it as immutable after construction.
 type SandboxPlan struct {
 	Project             project.Project
+	LinkedWorktree      *linkedWorktree
 	ConfigPath          string
 	ConfigSnapshot      []byte
 	AWSEnabled          bool
@@ -122,6 +123,10 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 	resolvedProject, err := project.Resolve(ctx, request.Directory, options.InvocationDir, options.UID, gitRoot)
 	if err != nil {
 		return SandboxPlan{}, err
+	}
+	linkedWorktree, err := planLinkedWorktree(resolvedProject.RootDir)
+	if err != nil {
+		return SandboxPlan{}, fmt.Errorf("plan linked worktree: %w", err)
 	}
 	selectedAlias, err := config.SelectAWSAlias(loaded.Config, request.AWSAlias)
 	if err != nil {
@@ -201,6 +206,7 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 
 	return SandboxPlan{
 		Project:             resolvedProject,
+		LinkedWorktree:      linkedWorktree,
 		ConfigPath:          loaded.Path,
 		ConfigSnapshot:      append([]byte(nil), loaded.Snapshot...),
 		AWSEnabled:          loaded.Config.AWS.Enabled,

@@ -55,7 +55,7 @@ func (a *App) awsCheck(ctx context.Context, request cli.AWSCheckRequest) (status
 		return 1, err
 	}
 	planned := plannedEnvironment(a.planOptions(), loaded.Config, alias, hash)
-	files, err := docker.CreateInvocationFiles(runtimeRoot, loaded.Snapshot, func(snapshot string) (docker.Override, error) {
+	files, err := docker.CreateInvocationFiles(runtimeRoot, loaded.Snapshot, func(_, snapshot string) (docker.Override, error) {
 		mounts, err := docker.CredentialsMounts(snapshot, loaded.Config.AWS.HostConfigPath, loaded.Config.AWS.HostCredentialsPath, loaded.Config.AWS.SSOCachePath)
 		if err != nil {
 			return docker.Override{}, err
