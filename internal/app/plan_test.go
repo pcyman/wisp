@@ -202,6 +202,83 @@ mode = "rw"
 	}
 }
 
+func TestPlanRunMountsHostSkillsWhenPresent(t *testing.T) {
+	for _, agent := range []string{"opencode", "pi"} {
+		t.Run(agent, func(t *testing.T) {
+			root, configPath, projectDir := applicationFixture(t)
+			home := filepath.Join(root, "home")
+			physical := filepath.Join(root, "shared-skills")
+			if err := os.Mkdir(physical, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(filepath.Join(home, ".agents"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(physical, filepath.Join(home, ".agents", "skills")); err != nil {
+				t.Fatal(err)
+			}
+			request := runRequest(configPath, projectDir, "")
+			request.Agent = agent
+			plan, err := PlanRun(context.Background(), request, PlanOptions{
+				InvocationDir: root, UID: os.Getuid(), GID: os.Getgid(),
+				Environment: HostEnvironment{Home: home, TempDir: root},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, m := range plan.Mounts {
+				if m.Target == "/home/sandbox/.agents/skills" {
+					found = true
+					if m.Source != physical || !m.ReadOnly || m.Bind.CreateHostPath {
+						t.Fatalf("skills mount = %#v", m)
+					}
+				}
+			}
+			if !found {
+				t.Fatalf("missing skills mount: %#v", plan.Mounts)
+			}
+		})
+	}
+}
+
+func TestPlanRunOmitsMissingHostSkills(t *testing.T) {
+	root, configPath, projectDir := applicationFixture(t)
+	plan, err := PlanRun(context.Background(), runRequest(configPath, projectDir, ""), PlanOptions{
+		InvocationDir: root, UID: os.Getuid(), GID: os.Getgid(),
+		Environment: HostEnvironment{Home: filepath.Join(root, "home"), TempDir: root},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range plan.Mounts {
+		if m.Target == "/home/sandbox/.agents/skills" {
+			t.Fatalf("mounted missing skills directory: %#v", m)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "home", ".agents")); !os.IsNotExist(err) {
+		t.Fatalf("planning created host .agents directory: %v", err)
+	}
+}
+
+func TestPlanRunRejectsNonDirectoryHostSkills(t *testing.T) {
+	root, configPath, projectDir := applicationFixture(t)
+	skills := filepath.Join(root, "home", ".agents", "skills")
+	if err := os.Mkdir(filepath.Dir(skills), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(skills, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := PlanRun(context.Background(), runRequest(configPath, projectDir, ""), PlanOptions{
+		InvocationDir: root, UID: os.Getuid(), GID: os.Getgid(),
+		Environment: HostEnvironment{Home: filepath.Join(root, "home"), TempDir: root},
+	})
+	if err == nil || !strings.Contains(err.Error(), "not a directory") {
+		t.Fatalf("non-directory skills path error = %v", err)
+	}
+}
+
 func TestPlanRunRetainsMissingOpenCodeWarnings(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "home")

@@ -182,6 +182,26 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 			}
 		}
 	}
+	if options.Environment.Home != "" {
+		skills := filepath.Join(options.Environment.Home, ".agents", "skills")
+		physical, statErr := filepath.EvalSymlinks(skills)
+		if statErr == nil {
+			info, err := os.Stat(physical)
+			if err != nil {
+				return SandboxPlan{}, fmt.Errorf("inspect host skills directory: %w", err)
+			}
+			if !info.IsDir() {
+				return SandboxPlan{}, fmt.Errorf("host skills path %q is not a directory", skills)
+			}
+			planned, err := docker.Bind(physical, "/home/sandbox/.agents/skills", true)
+			if err != nil {
+				return SandboxPlan{}, err
+			}
+			plannedMounts = append(plannedMounts, planned)
+		} else if !os.IsNotExist(statErr) {
+			return SandboxPlan{}, fmt.Errorf("resolve host skills directory: %w", statErr)
+		}
+	}
 	agentMountStart := len(plannedMounts)
 	agentMounts, err := selectedAgent.HostMounts(loaded.Config)
 	if err != nil {

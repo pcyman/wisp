@@ -86,7 +86,9 @@ default = "pi"
 
 Wisp uses `$XDG_CONFIG_HOME/wisp/config.toml`, falling back to
 `$HOME/.config/wisp/config.toml`. Host OpenCode config and authentication are
-mounted read-only when present. Wisp also mounts only the host Hunk
+mounted read-only when present. For either agent, Wisp also mounts host
+`$HOME/.agents/skills` read-only at the same path in the sandbox when the
+directory exists. Wisp also mounts only the host Hunk
 `config.toml` read-only from `$XDG_CONFIG_HOME/hunk` (or
 `$HOME/.config/hunk`), leaving Hunk state files unmounted. OpenCode session
 data is persisted separately for each project under
