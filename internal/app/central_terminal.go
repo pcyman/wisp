@@ -156,6 +156,18 @@ func (l *centralLog) String() string {
 	return l.text
 }
 
+// Dashboard decorations are monochrome, single-cell terminal glyphs. Keep
+// arbitrary non-Latin scripts and emoji conservative to avoid wrapping rows.
+func centralRuneCells(r rune) int {
+	if unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) {
+		return 0
+	}
+	if r < 0x1100 || strings.ContainsRune("─✦●○×◐◓◑◒◇↳▏·–", r) {
+		return 1
+	}
+	return 2
+}
+
 func centralText(text string, width int) string {
 	var result strings.Builder
 	cells := 0
@@ -163,14 +175,7 @@ func centralText(text string, width int) string {
 		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
 			r = ' '
 		}
-		size := 1
-		if unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) {
-			size = 0
-		} else if r >= 0x1100 {
-			// Conservative width for non-Latin scripts and emoji: never wrap a
-			// row into the next project even on wide-character terminals.
-			size = 2
-		}
+		size := centralRuneCells(r)
 		if cells+size > width {
 			break
 		}

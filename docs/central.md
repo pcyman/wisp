@@ -1,4 +1,4 @@
-# Wisp Central (basic version)
+# Wisp Central
 
 Central is a host-side terminal switchboard for on-demand project sandboxes.
 It requires an interactive terminal, but does not require host tmux.
@@ -43,8 +43,14 @@ See `wisp help central` for keys.
 
 ## Interaction
 
-The list shows configured projects, sandbox lifecycle, selected harness, and
-live agent activity. Nothing starts until you open a project. Enter or `o` starts its sandbox asynchronously;
+The dashboard shows configured projects, sandbox lifecycle, selected harness,
+and live agent activity, with colored status icons and animated indicators for
+starting, stopping, and working projects. The header summarizes running and
+busy projects; the selected project's path and activity appear below the list.
+On narrow terminals, secondary columns collapse into this detail area.
+Set `NO_COLOR=1` to disable colors while retaining icons and status text.
+
+Nothing starts until you open a project. Enter or `o` starts its sandbox asynchronously;
 press Enter again once running to attach to the agent.
 
 `e` and `g` launch host Neovim and lazygit in the physical project root.
