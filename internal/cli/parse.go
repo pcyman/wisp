@@ -12,6 +12,7 @@ const (
 	CommandRoot           Command = ""
 	CommandRun            Command = "run"
 	CommandAgents         Command = "agents"
+	CommandCentral        Command = "central"
 	CommandExec           Command = "exec"
 	CommandHunk           Command = "hunk"
 	CommandConfig         Command = "config"
@@ -100,6 +101,12 @@ func Parse(args []string) (Request, error) {
 	}
 
 	switch args[0] {
+	case "central":
+		if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
+			return Request{Command: CommandCentral, ShowHelp: true}, nil
+		}
+		path, err := parseConfigOption(args[1:])
+		return Request{Command: CommandCentral, Config: ConfigRequest{Path: path}}, err
 	case "agents":
 		if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
 			return Request{Command: CommandAgents, ShowHelp: true}, nil
@@ -402,7 +409,7 @@ func parseHelp(args []string) (Request, error) {
 
 func helpCommand(topic string) (Command, bool) {
 	switch Command(topic) {
-	case CommandAgents, CommandRun, CommandExec, CommandHunk, CommandConfig, CommandAWS,
+	case CommandCentral, CommandAgents, CommandRun, CommandExec, CommandHunk, CommandConfig, CommandAWS,
 		CommandDoctor, CommandVersion, CommandHelp:
 		return Command(topic), true
 	default:

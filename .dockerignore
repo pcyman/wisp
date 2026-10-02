@@ -4,3 +4,5 @@
 !container/agent-status.js
 !container/pi-agent-status.mjs
 !container/opencode.json
+!container/central-session.sh
+!container/central.tmux.conf

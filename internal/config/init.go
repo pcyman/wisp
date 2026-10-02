@@ -52,6 +52,11 @@ default = "opencode"
 # duration_seconds = 3600
 # eks_cluster = "development-cluster"
 
+# Project bookmarks for wisp central (opened on demand).
+# [[central.projects]]
+# name = "app"
+# path = "~/src/app"
+
 # [[mounts]]
 # source = "../shared-library"
 # target = "/workspace/repos/shared-library"

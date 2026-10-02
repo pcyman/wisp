@@ -10,10 +10,11 @@ import (
 
 // Container is the subset of Docker inspect data needed by lifecycle code.
 type Container struct {
-	ID      string
-	Name    string
-	Running bool
-	Labels  map[string]string
+	ID       string
+	Name     string
+	Running  bool
+	ExitCode int
+	Labels   map[string]string
 }
 
 // ImageExists distinguishes an absent image from an inspect failure.
@@ -72,7 +73,8 @@ func (c *Client) InspectContainer(ctx context.Context, name string) (*Container,
 			Labels map[string]string `json:"Labels"`
 		} `json:"Config"`
 		State struct {
-			Running bool `json:"Running"`
+			Running  bool `json:"Running"`
+			ExitCode int  `json:"ExitCode"`
 		} `json:"State"`
 	}
 	if err := json.Unmarshal(stdout, &values); err != nil {
@@ -81,7 +83,7 @@ func (c *Client) InspectContainer(ctx context.Context, name string) (*Container,
 	if len(values) != 1 {
 		return nil, fmt.Errorf("container inspect for %q returned %d objects", name, len(values))
 	}
-	return &Container{ID: values[0].ID, Name: strings.TrimPrefix(values[0].Name, "/"), Running: values[0].State.Running, Labels: values[0].Config.Labels}, nil
+	return &Container{ID: values[0].ID, Name: strings.TrimPrefix(values[0].Name, "/"), Running: values[0].State.Running, ExitCode: values[0].State.ExitCode, Labels: values[0].Config.Labels}, nil
 }
 
 // ProjectContainers discovers all containers owned by a Compose project and

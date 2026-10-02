@@ -30,6 +30,8 @@ var requiredAssets = []assetSpec{
 	{name: "Dockerfile", mode: 0o644},
 	{name: "compose.yaml", mode: 0o644},
 	{name: "container/agent-status.js", mode: 0o644},
+	{name: "container/central-session.sh", mode: 0o755},
+	{name: "container/central.tmux.conf", mode: 0o644},
 	{name: "container/entrypoint.sh", mode: 0o755},
 	{name: "container/opencode.json", mode: 0o644},
 	{name: "container/pi-agent-status.mjs", mode: 0o644},

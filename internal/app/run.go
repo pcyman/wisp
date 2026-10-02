@@ -23,6 +23,38 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 		return 1, err
 	}
 	a.recordStartupTiming("host.plan.ready")
+	return a.runPlan(ctx, plan, nil)
+}
+
+// runPlan retains locks, registration and invocation files for the entire
+// session. A non-nil ready callback selects Central's detached tmux lifecycle.
+func (a *App) runPlan(ctx context.Context, plan SandboxPlan, ready func(centralSandbox)) (status int, resultErr error) {
+	var centralCleanupErr error
+	finishCleanup := func(err error) {
+		if ready != nil {
+			centralCleanupErr = errors.Join(centralCleanupErr, err)
+			resultErr = errors.Join(resultErr, err)
+			if err != nil && status == 0 {
+				status = 1
+			}
+			return
+		}
+		status, resultErr = cleanupResult(status, resultErr, err, a.deps.Stderr)
+	}
+	defer func() {
+		if ready != nil && ctx.Err() != nil {
+			// Explicit stops and cancellation during startup are not failures,
+			// but cleanup failures must remain visible to Central.
+			status, resultErr = 0, centralCleanupErr
+			if resultErr != nil {
+				status = 1
+			}
+		}
+	}()
+	if ready != nil {
+		plan.Command = append([]string{"/usr/local/bin/wisp-central-session"}, plan.Command...)
+		plan.Environment = cloneEnvironment(plan.Environment)
+	}
 	for _, warning := range plan.Warnings {
 		fmt.Fprintf(a.deps.Stderr, "warning: %s\n", warning)
 	}
@@ -40,7 +72,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 	}
 	defer func() {
 		if closeErr := projectLock.Close(); closeErr != nil {
-			status, resultErr = cleanupResult(status, resultErr, fmt.Errorf("release project lock: %w", closeErr), a.deps.Stderr)
+			finishCleanup(fmt.Errorf("release project lock: %w", closeErr))
 		}
 	}()
 	agentDataMounts, err := prepareAgentDataMounts(plan.AgentDataRoot, plan.Project.Hash, plan.UID, plan.AgentKey, plan.SharedPiProfile)
@@ -63,7 +95,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 		return 1, fmt.Errorf("register agent: %w", err)
 	}
 	defer func() {
-		status, resultErr = cleanupResult(status, resultErr, registration.Cleanup(), a.deps.Stderr)
+		finishCleanup(registration.Cleanup())
 	}()
 	statusMount, err := docker.Bind(registration.StatusDir, agentstatus.MountTarget, false)
 	if err != nil {
@@ -113,7 +145,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 		return 1, err
 	}
 	defer func() {
-		status, resultErr = cleanupResult(status, resultErr, files.Cleanup(), a.deps.Stderr)
+		finishCleanup(files.Cleanup())
 	}()
 
 	a.recordStartupTiming("host.runtime.ready")
@@ -182,8 +214,12 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 		}
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), a.deps.CleanupTimeout)
 		defer cancel()
-		cleanupErr := a.cleanupComposeProject(cleanupCtx, invocation, plan.Project.Hash, plan.UID, map[string]bool{"sandbox": true, "credentials": true}, plan.Project.ContainerName)
-		status, resultErr = cleanupResult(status, resultErr, a.redact(cleanupErr, plan.Environment), a.deps.Stderr)
+		runID := ""
+		if ready != nil {
+			runID = registration.RunID
+		}
+		cleanupErr := a.cleanupComposeRun(cleanupCtx, invocation, plan.Project.Hash, plan.UID, map[string]bool{"sandbox": true, "credentials": true}, plan.Project.ContainerName, runID)
+		finishCleanup(a.redact(cleanupErr, plan.Environment))
 	}()
 
 	if plan.AWSEnabled {
@@ -204,6 +240,13 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 
 	fmt.Fprintf(a.deps.Stderr, "Starting %s...\n", plan.AgentName)
 	composeStarted = true
+	if ready != nil {
+		args := []string{"run", "--detach", "--no-TTY", "--name", plan.Project.ContainerName, "--user", fmt.Sprintf("%d:%d", plan.UID, plan.GID), "--workdir", plan.Project.Workdir(), "--no-deps", "sandbox"}
+		if _, stderr, err := a.docker.ComposeCapture(ctx, invocation, args...); err != nil {
+			return 1, a.redact(fmt.Errorf("start central sandbox: %s: %w", stderr, err), plan.Environment)
+		}
+		return a.waitCentralSandbox(ctx, plan, registration.RunID, ready)
+	}
 	args := []string{"run", "--rm", "--name", plan.Project.ContainerName, "--user", fmt.Sprintf("%d:%d", plan.UID, plan.GID), "--workdir", plan.Project.Workdir(), "--no-deps"}
 	if !a.deps.IsTerminal(a.deps.Stdin, a.deps.Stdout) {
 		args = append(args, "--no-TTY")
@@ -251,9 +294,16 @@ func (a *App) inspectProject(ctx context.Context, containerName, composeProject,
 }
 
 func (a *App) cleanupComposeProject(ctx context.Context, invocation docker.ComposeInvocation, hash string, uid int, allowedKinds map[string]bool, deterministicName string) error {
+	return a.cleanupComposeRun(ctx, invocation, hash, uid, allowedKinds, deterministicName, "")
+}
+
+func (a *App) cleanupComposeRun(ctx context.Context, invocation docker.ComposeInvocation, hash string, uid int, allowedKinds map[string]bool, deterministicName, runID string) error {
 	validate := func(containers []docker.Container) error {
 		for _, container := range containers {
 			expected := composeProjectLabels(hash, uid, "", invocation.ProjectName)
+			if runID != "" && container.Labels["wisp.kind"] == "sandbox" {
+				expected["wisp.run-id"] = runID
+			}
 			if err := docker.VerifyLabels(container.Labels, expected); err != nil {
 				return fmt.Errorf("container %q has mismatched labels: %w", container.Name, err)
 			}
@@ -294,7 +344,11 @@ func (a *App) cleanupComposeProject(ctx context.Context, invocation docker.Compo
 			return errors.Join(cleanupErr, inspectErr)
 		}
 		if survivor != nil {
-			if labelErr := docker.VerifyLabels(survivor.Labels, composeProjectLabels(hash, uid, "sandbox", invocation.ProjectName)); labelErr != nil {
+			expected := composeProjectLabels(hash, uid, "sandbox", invocation.ProjectName)
+			if runID != "" {
+				expected["wisp.run-id"] = runID
+			}
+			if labelErr := docker.VerifyLabels(survivor.Labels, expected); labelErr != nil {
 				return errors.Join(cleanupErr, fmt.Errorf("surviving container %q was not removed because its labels mismatch: %w", deterministicName, labelErr))
 			}
 			cleanupErr = errors.Join(cleanupErr, a.docker.RemoveContainer(ctx, deterministicName))

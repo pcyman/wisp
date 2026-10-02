@@ -20,6 +20,7 @@ type RawConfig struct {
 	Pi            *RawPiConfig       `toml:"pi"`
 	AWS           *RawAWSConfig      `toml:"aws"`
 	Mounts        []RawMountConfig   `toml:"mounts"`
+	Central       *RawCentralConfig  `toml:"central"`
 }
 
 type RawImageConfig struct {
@@ -92,6 +93,7 @@ type Config struct {
 	Hunk          HunkConfig
 	AWS           AWSConfig
 	Mounts        []MountConfig
+	Central       CentralConfig
 }
 
 type ImageConfig struct {

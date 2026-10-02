@@ -161,6 +161,11 @@ func Resolve(raw RawConfig) (Config, error) {
 	if err := validateMountTargets(cfg.Mounts); err != nil {
 		return Config{}, err
 	}
+	var err error
+	cfg.Central, err = resolveCentral(raw.Central)
+	if err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
 }
 

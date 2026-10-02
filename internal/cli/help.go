@@ -5,6 +5,7 @@ const rootHelp = `Usage:
   wisp COMMAND [ARGUMENTS]
 
 Commands:
+  central   Manage project sandboxes in a terminal control room
   agents    List or watch running Wisp agents as JSON
   run       Launch the selected agent in the sandbox
   exec      Execute a command in a running sandbox
@@ -19,6 +20,25 @@ Use "wisp help COMMAND" for command help.
 `
 
 var commandHelp = map[Command]string{
+	CommandCentral: `Usage:
+  wisp central [--config FILE]
+
+Configure [[central.projects]] entries with name and path in the global config.
+Requires an interactive terminal. Projects launch on demand in background tmux
+sessions. Central stops its own sandboxes on quit; images are retained.
+
+Keys:
+  j/k         Move (also arrows); / filter; Escape clear filter
+  Enter       Open a stopped project or attach to its running agent
+  o           Open project (launch its sandbox asynchronously)
+  e/g         Open host nvim/lazygit; also launch the sandbox if stopped
+  x           Stop selected sandbox
+  l           Toggle selected project startup logs
+  q/Ctrl-C    Quit (confirm with y when projects are active)
+
+Detach from an agent with Ctrl-b, d to return to Central.
+See docs/central.md for configuration, lifecycle, and terminal limitations.
+`,
 	CommandAgents: `Usage:
   wisp agents --json [--watch]
 

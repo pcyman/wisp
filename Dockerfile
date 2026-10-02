@@ -26,6 +26,8 @@ RUN apt-get update \
         python3 \
         python-is-python3 \
         ripgrep \
+        tmux \
+        ncurses-term \
         unzip \
         xz-utils \
     && ln -s /usr/bin/fdfind /usr/local/bin/fd \
@@ -216,6 +218,8 @@ RUN install -d -m 0755 /usr/local/share/wisp
 COPY --chmod=0644 container/agent-status.js /usr/local/share/wisp/agent-status.js
 COPY --chmod=0644 container/pi-agent-status.mjs /usr/local/share/wisp/pi-agent-status.mjs
 COPY --chmod=0644 container/opencode.json /usr/local/share/wisp/opencode.json
+COPY --chmod=0755 container/central-session.sh /usr/local/bin/wisp-central-session
+COPY --chmod=0644 container/central.tmux.conf /usr/local/share/wisp/central.tmux.conf
 # Ensure COPY cannot leave the plugin directory inaccessible to the runtime UID.
 RUN chmod 0755 /usr/local/share/wisp
 

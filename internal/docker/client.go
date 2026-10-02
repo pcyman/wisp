@@ -25,6 +25,11 @@ func (c *Client) Attached(ctx context.Context, args []string, env []string, stdi
 	return c.runner.Attached(ctx, process.Command{Path: c.path, Args: args, Env: SanitizeEnvironment(env, nil), Stdin: stdin, Stdout: stdout, Stderr: stderr})
 }
 
+// Capture runs a direct control command with the sanitized host environment.
+func (c *Client) Capture(ctx context.Context, args ...string) ([]byte, []byte, error) {
+	return c.capture(ctx, args, "", nil)
+}
+
 func NewClient(runner process.Runner) *Client {
 	return NewClientWithEnvironment(runner, os.Environ())
 }

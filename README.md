@@ -107,6 +107,9 @@ shared compiled-extension cache design and its development constraints.
 
 ## Usage
 
+For a terminal project switchboard with background agent sessions, see
+[`docs/central.md`](docs/central.md) and `wisp help central`.
+
 ```text
 wisp [RUN_OPTIONS] [DIRECTORY]   Launch the selected agent
 wisp exec [DIRECTORY] -- COMMAND
