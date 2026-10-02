@@ -120,6 +120,20 @@ func (a *App) centralWithTerminal(parent context.Context, configPath string, ter
 	if err != nil {
 		return 1, err
 	}
+	panes, err := a.newCentralPanes(ctx)
+	if err != nil {
+		return 1, err
+	}
+	if panes != nil {
+		defer func() {
+			cleanupCtx, stop := context.WithTimeout(context.Background(), a.deps.CleanupTimeout)
+			defer stop()
+			resultErr = errors.Join(resultErr, panes.close(cleanupCtx))
+			if resultErr != nil && status == 0 {
+				status = 1
+			}
+		}()
+	}
 	if err := terminal.resume(); err != nil {
 		_ = terminal.suspend()
 		return 1, err
@@ -325,6 +339,13 @@ func (a *App) centralWithTerminal(parent context.Context, configPath string, ter
 			}
 			if key != "e" && key != "g" && p.state != "running" {
 				message = "Wait for this project to finish starting."
+				continue
+			}
+			if panes != nil {
+				message = ""
+				if err := a.openCentralPane(ctx, panes, p, key); err != nil {
+					message = err.Error()
+				}
 				continue
 			}
 			handoff.Store(true)

@@ -80,19 +80,27 @@ func (a *App) waitCentralSandbox(ctx context.Context, plan SandboxPlan, runID st
 	}
 }
 
-func (a *App) attachCentral(ctx context.Context, sandbox centralSandbox) error {
+func (a *App) centralAttachmentArgs(ctx context.Context, sandbox centralSandbox) ([]string, error) {
 	container, err := a.docker.InspectContainer(ctx, sandbox.ID)
+	if err != nil {
+		return nil, err
+	}
+	if container == nil || !container.Running {
+		return nil, fmt.Errorf("central sandbox is no longer running")
+	}
+	if err := docker.VerifyLabels(container.Labels, sandbox.Labels); err != nil {
+		return nil, fmt.Errorf("refusing central attachment: %w", err)
+	}
+	return []string{
+		"exec", "--interactive", "--tty", "--user", fmt.Sprintf("%d:%d", a.deps.UID, a.deps.GID),
+		sandbox.ID, "tmux", "-u", "attach-session", "-t", "wisp",
+	}, nil
+}
+
+func (a *App) attachCentral(ctx context.Context, sandbox centralSandbox) error {
+	args, err := a.centralAttachmentArgs(ctx, sandbox)
 	if err != nil {
 		return err
 	}
-	if container == nil || !container.Running {
-		return fmt.Errorf("central sandbox is no longer running")
-	}
-	if err := docker.VerifyLabels(container.Labels, sandbox.Labels); err != nil {
-		return fmt.Errorf("refusing central attachment: %w", err)
-	}
-	return a.docker.Attached(ctx, []string{
-		"exec", "--interactive", "--tty", "--user", fmt.Sprintf("%d:%d", a.deps.UID, a.deps.GID),
-		sandbox.ID, "tmux", "-u", "attach-session", "-t", "wisp",
-	}, a.childEnvironment(nil), a.deps.Stdin, a.deps.Stdout, a.deps.Stderr)
+	return a.docker.Attached(ctx, args, a.childEnvironment(nil), a.deps.Stdin, a.deps.Stdout, a.deps.Stderr)
 }

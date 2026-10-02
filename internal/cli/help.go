@@ -36,7 +36,13 @@ Keys:
   l           Toggle selected project startup logs
   q/Ctrl-C    Quit (confirm with y when projects are active)
 
-Detach from an agent with Ctrl-b, d to return to Central.
+Inside host tmux (3.2+), all tools share one right-hand pane, with no splits.
+Repeating an open focuses the visible tool. Switching keeps sandbox agents
+running, but closes the previous host tool; save editor changes before switching.
+Use host pane navigation to return to Central. Quit closes only Central's own
+tool pane and sandboxes; save editor changes first.
+Outside host tmux, tools use the full terminal; detach an agent with Ctrl-b, d.
+Inside host tmux, Ctrl-b twice, d detaches the inner agent session.
 See docs/central.md for configuration, lifecycle, and terminal limitations.
 `,
 	CommandAgents: `Usage:

@@ -1,7 +1,8 @@
 # Wisp Central
 
 Central is a host-side terminal switchboard for on-demand project sandboxes.
-It requires an interactive terminal, but does not require host tmux.
+It requires an interactive terminal, but does not require host tmux. When run
+inside host tmux (3.2 or newer), it opens tools in panes of the same window.
 
 ## Configuration
 
@@ -54,9 +55,23 @@ Nothing starts until you open a project. Enter or `o` starts its sandbox asynchr
 press Enter again once running to attach to the agent.
 
 `e` and `g` launch host Neovim and lazygit in the physical project root.
-They also start the sandbox if the project is closed. Central suspends its
-screen and terminal input while another interactive program has control.
-Exiting the tool returns to Central. Missing tools are reported in the UI.
+They also start the sandbox if the project is closed.
+
+Inside host tmux, Central stays visible on the left with one shared tool pane
+on the right. Enter, `e`, and `g` replace the entire right-hand pane with the
+selected project's agent, Neovim, or lazygit; Central never splits that area.
+Repeating an open of the already-visible project/tool just focuses its pane.
+Switching away from an agent leaves its sandbox running in the background.
+Switching away from Neovim or lazygit closes that host tool: **save editor changes
+before switching tools or projects**. Editor sessions are not preserved.
+Use host tmux's pane navigation (by default **Ctrl-b, then an arrow**) to return
+to Central. Ordinary tool exit closes its pane; failed commands retain
+their pane so errors remain visible. Reopening replaces a failed pane. Tools use
+the host tmux session environment and the physical project directory.
+
+Outside host tmux, Central suspends its screen and terminal input while another
+interactive program has control. Exiting the tool returns to Central. Missing
+tools are reported in the UI. Central does not start a host tmux server for you.
 
 Filter by name or path with `/`; Enter finishes editing the filter and Escape
 clears it. `l` toggles a bounded tail of the selected project's startup logs.
@@ -68,9 +83,12 @@ Each sandbox runs one agent inside one bundled tmux session. Attachment uses
 `docker exec -it … tmux -u attach-session`, not `docker attach`. Tmux owns the
 persistent agent terminal and redraws it when clients reconnect or resize.
 
-Detach with **Ctrl-b, then d**. Inside host tmux with the default prefix, use
-**Ctrl-b twice, then d** to reach the inner tmux. Hold Shift while dragging to
-use your host terminal's text selection, then use its normal copy shortcut.
+Outside host tmux, detach with **Ctrl-b, then d** to return to Central. Inside
+host tmux with the default prefix, use **Ctrl-b twice, then d** to detach the
+inner tmux and close the attachment pane, without stopping the agent. To keep
+the attachment visible, just switch back to Central using host pane navigation.
+Hold Shift while dragging to use your host terminal's text selection, then use
+its normal copy shortcut.
 
 The wrapper uses a UTF-8 locale and clients attach with `-u`. Extended keys
 are enabled in the bundled config before the agent starts, but modified Enter
@@ -85,8 +103,11 @@ The registry remains compatible with `wisp agents --json`.
 Quit with `q` or Ctrl-C. When projects are active, confirm with `y`.
 Central cancels in-progress launches and cleans its own sandboxes and credential
 brokers, in parallel, using bounded cleanup contexts and ownership checks.
-SIGTERM and SIGHUP also trigger cleanup. Ctrl-C inside a handed-off program
-belongs to that program, rather than terminating every sandbox.
+It also closes only its own host tool/attachment panes, including failed panes;
+pre-existing panes and the host tmux server are left alone. Save editor changes
+before quitting Central. Stopping a sandbox with `x` does not close host editors.
+SIGTERM and SIGHUP also trigger cleanup. Ctrl-C inside a tool pane or handed-off
+program belongs to that program, rather than terminating every sandbox.
 
 Central does not adopt sandboxes launched independently: their project locks
 or running-container checks reject a conflicting launch. It verifies the
@@ -111,5 +132,6 @@ activity as `(unavailable)`, until collection recovers. Reporter timestamps are
 not used as liveness deadlines. `done` describes an observed turn, not proof
 that the overall task succeeded. See [agent-status.md](agent-status.md).
 
-This version is deliberately not a terminal-pane compositor, persistent daemon,
-or multi-agent-per-project manager.
+Central delegates optional pane layout to host tmux; it is not a terminal
+emulator, persistent daemon, or multi-agent-per-project manager. Container tmux
+still preserves the agent terminal independently of host attachment panes.

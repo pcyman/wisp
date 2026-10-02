@@ -1,6 +1,9 @@
 package cli
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseCentral(t *testing.T) {
 	for _, args := range [][]string{{"central"}, {"central", "--config", "/tmp/wisp.toml"}, {"central", "--config=/tmp/wisp.toml"}} {
@@ -26,7 +29,9 @@ func TestParseCentral(t *testing.T) {
 			t.Errorf("accepted %v", args)
 		}
 	}
-	if Help(CommandCentral) == "" {
-		t.Fatal("missing help")
+	for _, text := range []string{"Inside host tmux", "focuses the visible tool", "no splits", "Outside host tmux", "save editor changes"} {
+		if !strings.Contains(Help(CommandCentral), text) {
+			t.Errorf("help missing %q", text)
+		}
 	}
 }
