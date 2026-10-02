@@ -131,7 +131,6 @@ type OpenCodeConfig struct {
 type PiConfig struct {
 	ConfigPath         string
 	ConfigPathExplicit bool
-	MCPConfigPath      string
 }
 
 type HunkConfig struct {

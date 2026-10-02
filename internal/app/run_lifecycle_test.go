@@ -212,16 +212,16 @@ func TestRunPiMountsSharedProfileAndProjectState(t *testing.T) {
 		if !reflect.DeepEqual(sandbox.Command, []string{"pi", "-e", "/usr/local/share/wisp/pi-agent-status.mjs"}) {
 			return fmt.Errorf("Pi command = %#v", sandbox.Command)
 		}
-		wantTargets := []string{"/workspace/current", "/run/wisp/pi/agent", "/run/wisp/pi/sessions", "/run/wisp/pi/agent/trust.json", "/run/wisp/agent/data", "/run/wisp/mcp/mcp.json", "/run/wisp/agent-status", "/run/wisp/jiti-cache"}
+		wantTargets := []string{"/workspace/current", "/run/wisp/pi/agent", "/run/wisp/pi/sessions", "/run/wisp/pi/agent/trust.json", "/run/wisp/agent/data", "/run/wisp/agent-status", "/run/wisp/jiti-cache"}
 		if len(sandbox.Volumes) != len(wantTargets) {
 			return fmt.Errorf("Pi volumes = %s", data)
 		}
 		for i, target := range wantTargets {
-			if sandbox.Volumes[i].Target != target || sandbox.Volumes[i].ReadOnly != (target == "/run/wisp/mcp/mcp.json") {
+			if sandbox.Volumes[i].Target != target || sandbox.Volumes[i].ReadOnly {
 				return fmt.Errorf("Pi volume %d = %#v", i, sandbox.Volumes[i])
 			}
 		}
-		metadataPath := filepath.Join(filepath.Dir(sandbox.Volumes[6].Source), "metadata.json")
+		metadataPath := filepath.Join(filepath.Dir(sandbox.Volumes[5].Source), "metadata.json")
 		metadata, err := os.ReadFile(metadataPath)
 		if err != nil {
 			return err

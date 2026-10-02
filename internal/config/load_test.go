@@ -122,7 +122,7 @@ func TestLoadForRunValidatesOnlySelectedAgentPaths(t *testing.T) {
 	}
 }
 
-func TestLoadForRunPiMCPConfigIsOptionalAndMustBeRegular(t *testing.T) {
+func TestLoadForRunPiIgnoresLegacyMCPConfig(t *testing.T) {
 	for _, test := range []struct {
 		name  string
 		setup func(string) error
@@ -145,18 +145,8 @@ func TestLoadForRunPiMCPConfigIsOptionalAndMustBeRegular(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			result, err := LoadForRun(configPath, Environment{Home: root}, "pi")
-			if test.name == "absent" {
-				if err != nil {
-					t.Fatal(err)
-				}
-				if result.Config.Pi.MCPConfigPath != "" {
-					t.Fatalf("Pi MCP config path = %q, want omitted", result.Config.Pi.MCPConfigPath)
-				}
-				return
-			}
-			if err == nil || !strings.Contains(err.Error(), "Pi MCP config path") || !strings.Contains(err.Error(), "not a regular file") {
-				t.Fatalf("LoadForRun() error = %v, want non-regular Pi MCP config error", err)
+			if _, err := LoadForRun(configPath, Environment{Home: root}, "pi"); err != nil {
+				t.Fatalf("legacy MCP config should be ignored: %v", err)
 			}
 		})
 	}

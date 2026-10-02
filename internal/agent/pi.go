@@ -10,7 +10,6 @@ const (
 	PiSessionsTarget  = "/run/wisp/pi/sessions"
 	PiTrustTarget     = PiAgentTarget + "/trust.json"
 	PiJITICacheTarget = "/run/wisp/jiti-cache"
-	PiMCPConfigTarget = "/run/wisp/mcp/mcp.json"
 )
 
 // Pi is Wisp's Pi agent-harness integration.
@@ -26,16 +25,9 @@ func (Pi) ContainerCommand() []string {
 }
 
 func (Pi) HostMounts(cfg config.Config) ([]docker.Mount, error) {
-	mounts := make([]docker.Mount, 0, 3)
+	mounts := make([]docker.Mount, 0, 2)
 	if cfg.Pi.ConfigPath != "" {
 		planned, err := docker.Bind(cfg.Pi.ConfigPath, PiAgentTarget, false)
-		if err != nil {
-			return nil, err
-		}
-		mounts = append(mounts, planned)
-	}
-	if cfg.Pi.MCPConfigPath != "" {
-		planned, err := docker.Bind(cfg.Pi.MCPConfigPath, PiMCPConfigTarget, true)
 		if err != nil {
 			return nil, err
 		}

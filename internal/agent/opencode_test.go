@@ -50,15 +50,13 @@ func TestSelectPi(t *testing.T) {
 		t.Fatalf("selected agent = %q %q %#v", a.Key(), a.Name(), a.ContainerCommand())
 	}
 	cfg := config.Config{Pi: config.PiConfig{
-		ConfigPath:    "/host/.pi/agent",
-		MCPConfigPath: "/host/.config/mcp/mcp.json",
+		ConfigPath: "/host/.pi/agent",
 	}}
 	mounts, err := a.HostMounts(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(mounts) != 2 || mounts[0].Target != PiAgentTarget || mounts[0].ReadOnly ||
-		mounts[1].Source != cfg.Pi.MCPConfigPath || mounts[1].Target != PiMCPConfigTarget || !mounts[1].ReadOnly {
+	if len(mounts) != 1 || mounts[0].Source != cfg.Pi.ConfigPath || mounts[0].Target != PiAgentTarget || mounts[0].ReadOnly {
 		t.Fatalf("Pi mounts = %#v", mounts)
 	}
 }
