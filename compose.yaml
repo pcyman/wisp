@@ -63,6 +63,10 @@ services:
     environment:
       HOME: /home/sandbox
       KUBECONFIG: /home/sandbox/.kube/config
+      WISP_AZURE_CLIENT_ID: ${WISP_AZURE_CLIENT_ID:-}
+      WISP_AZURE_TENANT_ID: ${WISP_AZURE_TENANT_ID:-}
+      WISP_AZURE_SUBSCRIPTION_ID: ${WISP_AZURE_SUBSCRIPTION_ID:-}
+      WISP_AZURE_CLIENT_SECRET: ${WISP_AZURE_CLIENT_SECRET:-}
       TMPDIR: /run/wisp/tmp
       XDG_DATA_HOME: /run/wisp/agent/data
       PI_CODING_AGENT_DIR: /run/wisp/pi/agent

@@ -5,7 +5,9 @@ Wisp runs [OpenCode](https://opencode.ai/) or the
 project. The project is mounted read-write, while agent state is mounted only
 where needed. AWS access is opt-in
 and, when configured, is supplied through a separate credential broker that
-assumes a configured role.
+assumes a configured role. Azure CLI (`az`) is included in the sandbox image;
+Azure service-principal login is opt-in through explicit `WISP_AZURE_*`
+environment variables; see [Azure authentication](docs/azure.md).
 
 ## Requirements
 

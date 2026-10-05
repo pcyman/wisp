@@ -64,6 +64,36 @@ if [ -n "${AWS_CONTAINER_CREDENTIALS_FULL_URI:-}" ]; then
     fi
 fi
 
+# Azure credentials are explicitly scoped to Wisp, not application SDK inputs.
+azure_count=0
+for azure_key in WISP_AZURE_CLIENT_ID WISP_AZURE_TENANT_ID WISP_AZURE_SUBSCRIPTION_ID WISP_AZURE_CLIENT_SECRET; do
+    if [ -n "${!azure_key:-}" ]; then
+        azure_count=$((azure_count + 1))
+    fi
+done
+if ((azure_count != 0)); then
+    if ((azure_count != 4)); then
+        echo "error: Azure login requires all four WISP_AZURE_* credential variables" >&2
+        exit 2
+    fi
+    # Never reuse a host token cache or print authentication command output.
+    export AZURE_CONFIG_DIR="${HOME}/.azure"
+    mkdir -p -- "${AZURE_CONFIG_DIR}"
+    chmod 700 -- "${AZURE_CONFIG_DIR}"
+    if ! az login --service-principal \
+        --username "${WISP_AZURE_CLIENT_ID}" \
+        --password="${WISP_AZURE_CLIENT_SECRET}" \
+        --tenant "${WISP_AZURE_TENANT_ID}" \
+        --output none >/dev/null 2>&1; then
+        echo "error: Azure service-principal login failed" >&2
+        exit 1
+    fi
+    if ! az account set --subscription "${WISP_AZURE_SUBSCRIPTION_ID}" >/dev/null 2>&1; then
+        echo "error: Azure subscription selection failed" >&2
+        exit 1
+    fi
+fi
+
 startup_timing container.bootstrap.ready
 
 if (($# == 0)); then

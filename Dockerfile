@@ -100,6 +100,14 @@ RUN set -eux; \
     /tmp/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli; \
     rm -rf /tmp/aws /tmp/awscliv2.zip
 
+# Install Azure CLI from Microsoft's Debian package repository.
+RUN set -eux; \
+    curl -fsSL https://aka.ms/InstallAzureCLIDeb -o /tmp/install-azure-cli; \
+    bash /tmp/install-azure-cli; \
+    rm /tmp/install-azure-cli; \
+    az --version; \
+    rm -rf /var/lib/apt/lists/* /root/.azure
+
 RUN set -eux; \
     case "${TARGETARCH}" in \
         amd64|arm64) arch="${TARGETARCH}" ;; \

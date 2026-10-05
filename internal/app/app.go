@@ -144,7 +144,7 @@ func (a *App) recordStartupTiming(event string) {
 }
 
 func (a *App) planOptions() PlanOptions {
-	return PlanOptions{InvocationDir: a.deps.InvocationDir, UID: a.deps.UID, GID: a.deps.GID, CLIVersion: a.deps.Version, Environment: a.env, Runner: a.deps.Runner, ProcessEnv: a.childEnvironment(nil)}
+	return PlanOptions{InvocationDir: a.deps.InvocationDir, UID: a.deps.UID, GID: a.deps.GID, CLIVersion: a.deps.Version, Environment: a.env, Runner: a.deps.Runner, ProcessEnv: append([]string(nil), a.deps.Environment...)}
 }
 
 func (a *App) childEnvironment(planned map[string]string) []string {
@@ -167,8 +167,10 @@ func (a *App) redact(err error, environment map[string]string) error {
 }
 
 func (a *App) redactText(message string, environment map[string]string) string {
-	if token := environment["WISP_AWS_AUTHORIZATION_TOKEN"]; token != "" {
-		message = strings.ReplaceAll(message, token, "[REDACTED]")
+	for _, key := range []string{"WISP_AWS_AUTHORIZATION_TOKEN", "WISP_AZURE_CLIENT_SECRET"} {
+		if secret := environment[key]; secret != "" {
+			message = strings.ReplaceAll(message, secret, "[REDACTED]")
+		}
 	}
 	return message
 }

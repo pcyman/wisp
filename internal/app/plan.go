@@ -95,6 +95,11 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 		return SandboxPlan{}, fmt.Errorf("invocation directory %q is not absolute", options.InvocationDir)
 	}
 
+	azureEnvironment, err := planAzureEnvironment(options.ProcessEnv)
+	if err != nil {
+		return SandboxPlan{}, err
+	}
+
 	cfgEnv := config.Environment{
 		Home:          options.Environment.Home,
 		XDGConfigHome: options.Environment.XDGConfigHome,
@@ -223,6 +228,9 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 	}
 
 	environment := plannedEnvironment(options, loaded.Config, selectedAlias, resolvedProject.Hash)
+	for key, value := range azureEnvironment {
+		environment[key] = value
+	}
 
 	return SandboxPlan{
 		Project:             resolvedProject,

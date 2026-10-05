@@ -12,6 +12,8 @@ import (
 )
 
 var privateEnvironment = map[string]struct{}{
+	"WISP_AZURE_CLIENT_ID": {}, "WISP_AZURE_TENANT_ID": {},
+	"WISP_AZURE_SUBSCRIPTION_ID": {}, "WISP_AZURE_CLIENT_SECRET": {},
 	"WISP_RUN_ID": {},
 	"WISP_IMAGE":  {}, "WISP_CREDENTIALS_IMAGE": {}, "WISP_UID": {},
 	"WISP_GID": {}, "WISP_AWS_ALIAS": {}, "WISP_AWS_AUTHORIZATION_TOKEN": {},
