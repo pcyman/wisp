@@ -175,12 +175,15 @@ func TestSelectAWSAlias(t *testing.T) {
 		t.Fatalf("default selection = %q, %v", got, err)
 	}
 	cfg.AWS.Default = ""
-	if _, err := SelectAWSAlias(cfg, ""); err == nil {
-		t.Fatal("SelectAWSAlias() selected nondeterministically from multiple aliases")
+	if got, err := SelectAWSAlias(cfg, ""); err != nil || got != "" {
+		t.Fatalf("no-default multiple-alias selection = %q, %v", got, err)
 	}
 	cfg.AWS.Aliases = map[string]AWSAliasConfig{"sole": {}}
-	if got, err := SelectAWSAlias(cfg, ""); err != nil || got != "sole" {
-		t.Fatalf("sole selection = %q, %v", got, err)
+	if got, err := SelectAWSAlias(cfg, ""); err != nil || got != "" {
+		t.Fatalf("no-default sole-alias selection = %q, %v", got, err)
+	}
+	if got, err := SelectAWSAlias(cfg, "sole"); err != nil || got != "sole" {
+		t.Fatalf("explicit sole-alias selection = %q, %v", got, err)
 	}
 	if _, err := SelectAWSAlias(cfg, "missing"); err == nil {
 		t.Fatal("SelectAWSAlias() accepted missing requested alias")

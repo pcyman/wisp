@@ -238,8 +238,8 @@ func validateMountTargets(mounts []MountConfig) error {
 	return nil
 }
 
-// SelectAWSAlias applies requested, configured-default, then sole-alias
-// precedence. It never relies on map iteration order.
+// SelectAWSAlias applies requested then configured-default precedence.
+// An empty selection means AWS access is disabled for the run.
 func SelectAWSAlias(cfg Config, requested string) (string, error) {
 	if !cfg.AWS.Enabled {
 		if requested != "" {
@@ -256,12 +256,7 @@ func SelectAWSAlias(cfg Config, requested string) (string, error) {
 	if cfg.AWS.Default != "" {
 		return cfg.AWS.Default, nil
 	}
-	if len(cfg.AWS.Aliases) == 1 {
-		for name := range cfg.AWS.Aliases {
-			return name, nil
-		}
-	}
-	return "", errors.New("multiple AWS aliases are configured; configure aws.default or pass --aws ALIAS")
+	return "", nil
 }
 
 // SelectAgent applies requested then configured-default precedence.

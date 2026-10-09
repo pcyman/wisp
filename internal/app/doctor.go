@@ -107,6 +107,8 @@ func (a *App) doctor(ctx context.Context, override string) int {
 		} else {
 			if alias, err := config.SelectAWSAlias(effective, ""); err != nil {
 				report.line("FAIL", "AWS alias", err.Error())
+			} else if alias == "" {
+				report.line("PASS", "AWS support", "configured; disabled for runs unless --aws ALIAS is supplied")
 			} else {
 				report.line("PASS", "AWS alias", alias)
 			}

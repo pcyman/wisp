@@ -101,58 +101,71 @@ func (f *lifecycleFake) runner(t *testing.T) *recordingRunner {
 }
 
 func TestRunWithoutAWSDoesNotStartBrokerOrGenerateToken(t *testing.T) {
-	root, configPath, projectDir := applicationFixture(t)
-	if err := os.WriteFile(configPath, []byte("schema_version = 1\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	var stderr bytes.Buffer
-	fake := &lifecycleFake{}
-	application := newFixtureApp(t, root, fake.runner(t), &bytes.Buffer{}, &stderr)
-	application.deps.Environment = append(application.deps.Environment, "WISP_STARTUP_TIMING=1")
-	randomReads := 0
-	application.deps.Random = observingReader{Reader: bytes.NewReader(make([]byte, 32)), observed: func() { randomReads++ }}
-	fake.attachedError = func(command process.Command) error {
-		if testEnvironmentValue(command.Env, "WISP_STARTUP_TIMING") != "1" {
-			return errors.New("startup timing environment did not reach Compose")
-		}
-		if testEnvironmentValue(command.Env, "WISP_AWS_AUTHORIZATION_TOKEN") != "" || testEnvironmentValue(command.Env, "WISP_AWS_ALIAS") != "" {
-			return errors.New("AWS environment reached disabled run")
-		}
-		runIndex := indexSlice(command.Args, []string{"run", "--rm"})
-		if runIndex < 2 || command.Args[runIndex-2] != "--file" {
-			return fmt.Errorf("override file not found in Compose arguments: %v", command.Args)
-		}
-		contents, err := os.ReadFile(command.Args[runIndex-1])
-		if err != nil {
-			return err
-		}
-		var override struct {
-			Services map[string]struct {
-				Volumes []struct {
-					Source   string `json:"source"`
-					Target   string `json:"target"`
-					ReadOnly bool   `json:"read_only"`
-				} `json:"volumes"`
-			} `json:"services"`
-		}
-		if err := json.Unmarshal(contents, &override); err != nil {
-			return err
-		}
-		volumes := override.Services["sandbox"].Volumes
-		if len(volumes) != 3 || volumes[1].Target != "/run/wisp/agent/data/opencode" || volumes[1].ReadOnly {
-			return fmt.Errorf("sandbox volumes do not include writable OpenCode data: %s", contents)
-		}
-		return nil
-	}
+	for _, configured := range []bool{false, true} {
+		t.Run(fmt.Sprintf("configured=%t", configured), func(t *testing.T) {
+			root, configPath, projectDir := applicationFixture(t)
+			contents := []byte("schema_version = 1\n")
+			if configured {
+				var err error
+				contents, err = os.ReadFile(configPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				contents = bytes.ReplaceAll(contents, []byte("default = \"dev\"\n"), nil)
+			}
+			if err := os.WriteFile(configPath, contents, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			var stderr bytes.Buffer
+			fake := &lifecycleFake{}
+			application := newFixtureApp(t, root, fake.runner(t), &bytes.Buffer{}, &stderr)
+			application.deps.Environment = append(application.deps.Environment, "WISP_STARTUP_TIMING=1")
+			randomReads := 0
+			application.deps.Random = observingReader{Reader: bytes.NewReader(make([]byte, 32)), observed: func() { randomReads++ }}
+			fake.attachedError = func(command process.Command) error {
+				if testEnvironmentValue(command.Env, "WISP_STARTUP_TIMING") != "1" {
+					return errors.New("startup timing environment did not reach Compose")
+				}
+				if testEnvironmentValue(command.Env, "WISP_AWS_AUTHORIZATION_TOKEN") != "" || testEnvironmentValue(command.Env, "WISP_AWS_ALIAS") != "" {
+					return errors.New("AWS environment reached disabled run")
+				}
+				runIndex := indexSlice(command.Args, []string{"run", "--rm"})
+				if runIndex < 2 || command.Args[runIndex-2] != "--file" {
+					return fmt.Errorf("override file not found in Compose arguments: %v", command.Args)
+				}
+				contents, err := os.ReadFile(command.Args[runIndex-1])
+				if err != nil {
+					return err
+				}
+				var override struct {
+					Services map[string]struct {
+						Volumes []struct {
+							Source   string `json:"source"`
+							Target   string `json:"target"`
+							ReadOnly bool   `json:"read_only"`
+						} `json:"volumes"`
+					} `json:"services"`
+				}
+				if err := json.Unmarshal(contents, &override); err != nil {
+					return err
+				}
+				volumes := override.Services["sandbox"].Volumes
+				if len(volumes) != 3 || volumes[1].Target != "/run/wisp/agent/data/opencode" || volumes[1].ReadOnly {
+					return fmt.Errorf("sandbox volumes do not include writable OpenCode data: %s", contents)
+				}
+				return nil
+			}
 
-	status := application.Execute(context.Background(), cli.Request{Command: cli.CommandRun, Run: cli.RunRequest{Directory: projectDir, ConfigPath: configPath}})
-	if status != 0 || fake.upCount != 0 || randomReads != 0 || strings.Contains(stderr.String(), "credential broker") {
-		t.Fatalf("status=%d broker starts=%d random reads=%d stderr=%q", status, fake.upCount, randomReads, stderr.String())
-	}
-	for _, marker := range []string{"host.run.start", "host.sandbox.run", "host.sandbox.exit"} {
-		if !strings.Contains(stderr.String(), "[wisp startup]") || !strings.Contains(stderr.String(), marker) {
-			t.Errorf("startup timing output missing %q: %q", marker, stderr.String())
-		}
+			status := application.Execute(context.Background(), cli.Request{Command: cli.CommandRun, Run: cli.RunRequest{Directory: projectDir, ConfigPath: configPath}})
+			if status != 0 || fake.upCount != 0 || randomReads != 0 || strings.Contains(stderr.String(), "credential broker") {
+				t.Fatalf("status=%d broker starts=%d random reads=%d stderr=%q", status, fake.upCount, randomReads, stderr.String())
+			}
+			for _, marker := range []string{"host.run.start", "host.sandbox.run", "host.sandbox.exit"} {
+				if !strings.Contains(stderr.String(), "[wisp startup]") || !strings.Contains(stderr.String(), marker) {
+					t.Errorf("startup timing output missing %q: %q", marker, stderr.String())
+				}
+			}
+		})
 	}
 }
 

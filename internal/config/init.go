@@ -38,7 +38,8 @@ default = "opencode"
 [pi]
 # config_path = "~/.pi/agent"
 
-# AWS is opt-in. Uncomment this table and at least one alias to enable it.
+# Configure AWS aliases, then select one with --aws ALIAS for a run.
+# Set default to enable AWS automatically; omit it to keep plain wisp without AWS.
 # [aws]
 # default = "development"
 # host_config_path = "~/.aws/config"

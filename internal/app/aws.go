@@ -32,6 +32,9 @@ func (a *App) awsCheck(ctx context.Context, request cli.AWSCheckRequest) (status
 	if err != nil {
 		return 1, err
 	}
+	if alias == "" {
+		return 1, errors.New("no AWS alias selected; configure aws.default or pass an alias to wisp aws check")
+	}
 	digest := sha256.Sum256([]byte("wisp-aws-check\x00" + loaded.Path + "\x00" + alias))
 	hash := hex.EncodeToString(digest[:])
 	composeProject := "wisp-check-" + strconv.Itoa(a.deps.UID) + "-" + hash[:16]

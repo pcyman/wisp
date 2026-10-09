@@ -235,6 +235,25 @@ func TestAWSCheckRejectsDisabledAWSBeforeDocker(t *testing.T) {
 	}
 }
 
+func TestAWSCheckRequiresAliasWithoutDefaultBeforeDocker(t *testing.T) {
+	root, configPath, _ := applicationFixture(t)
+	contents, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents = bytes.ReplaceAll(contents, []byte("default = \"dev\"\n"), nil)
+	if err := os.WriteFile(configPath, contents, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	runner := &recordingRunner{}
+	application := newFixtureApp(t, root, runner, &bytes.Buffer{}, &stderr)
+	status := application.Execute(context.Background(), cli.Request{Command: cli.CommandAWSCheck, AWSCheck: cli.AWSCheckRequest{ConfigPath: configPath}})
+	if status != 1 || !strings.Contains(stderr.String(), "no AWS alias selected") || len(runner.commands) != 0 {
+		t.Fatalf("status=%d commands=%d stderr=%q", status, len(runner.commands), stderr.String())
+	}
+}
+
 func TestBrokerStartupLogsRedactAuthorizationToken(t *testing.T) {
 	root, configPath, projectDir := applicationFixture(t)
 	var stderr bytes.Buffer
@@ -324,7 +343,7 @@ func applicationFixture(t *testing.T) (root, configPath, projectDir string) {
 		t.Fatal(err)
 	}
 	configPath = filepath.Join(root, "config.toml")
-	contents := fmt.Sprintf("schema_version = 1\n[aws]\nhost_config_path = %q\nsso_cache_path = %q\n[aws.aliases.dev]\nprofile = %q\nrole_arn = %q\n", awsConfig, awsCache, "dev-profile", "arn:aws:iam::123456789012:role/Wisp")
+	contents := fmt.Sprintf("schema_version = 1\n[aws]\ndefault = \"dev\"\nhost_config_path = %q\nsso_cache_path = %q\n[aws.aliases.dev]\nprofile = %q\nrole_arn = %q\n", awsConfig, awsCache, "dev-profile", "arn:aws:iam::123456789012:role/Wisp")
 	if err := os.WriteFile(configPath, []byte(contents), 0600); err != nil {
 		t.Fatal(err)
 	}

@@ -37,8 +37,8 @@ ${EDITOR:-vi} "$(wisp config path)"
 wisp config validate
 ```
 
-AWS and the EKS kubeconfig integration are disabled unless the config contains
-an `[aws]` table with at least one alias. To enable them, configure a role:
+AWS and the EKS kubeconfig integration are enabled for a run only when an
+alias is selected using `--aws ALIAS` or `aws.default`. Configure a role:
 
 ```toml
 [aws]
@@ -50,6 +50,10 @@ role_arn = "arn:aws:iam::123456789012:role/Wisp"
 region = "eu-west-1"
 # eks_cluster = "development-cluster"
 ```
+
+`aws.default` is optional. Omit it to keep AWS configured while plain `wisp`
+runs without AWS access—even with only one alias. Use `wisp --aws development`
+to enable access for a single run. Setting `aws.default` enables access by default.
 
 When `profile` is set, Wisp uses that profile as the source identity for
 `AssumeRole`. When it is omitted, boto3 uses its default credential chain.

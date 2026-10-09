@@ -137,6 +137,10 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 	if err != nil {
 		return SandboxPlan{}, err
 	}
+	awsInputs := loaded.Config.AWS
+	if selectedAlias == "" {
+		awsInputs = config.AWSConfig{}
+	}
 
 	specs := make([]mount.Spec, len(loaded.Config.Mounts))
 	for i, configured := range loaded.Config.Mounts {
@@ -237,11 +241,11 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 		LinkedWorktree:      linkedWorktree,
 		ConfigPath:          loaded.Path,
 		ConfigSnapshot:      append([]byte(nil), loaded.Snapshot...),
-		AWSEnabled:          loaded.Config.AWS.Enabled,
+		AWSEnabled:          selectedAlias != "",
 		SelectedAWSAlias:    selectedAlias,
-		AWSConfigPath:       loaded.Config.AWS.HostConfigPath,
-		AWSCredentialsPath:  loaded.Config.AWS.HostCredentialsPath,
-		AWSSSOCachePath:     loaded.Config.AWS.SSOCachePath,
+		AWSConfigPath:       awsInputs.HostConfigPath,
+		AWSCredentialsPath:  awsInputs.HostCredentialsPath,
+		AWSSSOCachePath:     awsInputs.SSOCachePath,
 		UID:                 options.UID,
 		GID:                 options.GID,
 		Images:              loaded.Config.Images,
@@ -297,7 +301,7 @@ func plannedEnvironment(options PlanOptions, cfg config.Config, alias, projectHa
 		"GO_VERSION":             versions.Go,
 		"BOTO3_VERSION":          versions.Boto3,
 	}
-	if cfg.AWS.Enabled {
+	if alias != "" {
 		environment["WISP_AWS_ALIAS"] = alias
 	}
 	if options.Environment.Term != "" {

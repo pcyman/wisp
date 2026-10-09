@@ -315,11 +315,29 @@ role_arn = "arn:aws:iam::123456789012:role/Wisp"
 	if err != nil {
 		t.Fatal(err)
 	}
+	if plan.AWSEnabled || plan.SelectedAWSAlias != "" || plan.AWSConfigPath != "" || plan.AWSCredentialsPath != "" || plan.AWSSSOCachePath != "" {
+		t.Fatalf("unselected AWS inputs reached plan: %#v", plan)
+	}
+	if _, ok := plan.Environment["WISP_AWS_ALIAS"]; ok {
+		t.Fatal("unselected AWS alias reached environment")
+	}
 	if len(plan.Warnings) != 3 {
 		t.Fatalf("warnings = %q, want OpenCode config, auth, and Hunk config warnings", plan.Warnings)
 	}
 	if len(plan.Mounts) != 1 || plan.Mounts[0].Target != "/workspace/current" {
 		t.Fatalf("mounts = %#v, want only project", plan.Mounts)
+	}
+	request := runRequest(configPath, projectDir, "")
+	request.AWSAlias = "only"
+	selected, err := PlanRun(context.Background(), request, PlanOptions{
+		InvocationDir: root, UID: os.Getuid(), GID: os.Getgid(),
+		Environment: HostEnvironment{Home: home, TempDir: root},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !selected.AWSEnabled || selected.SelectedAWSAlias != "only" || selected.AWSConfigPath != awsConfig || selected.Environment["WISP_AWS_ALIAS"] != "only" {
+		t.Fatalf("explicit AWS selection = %#v", selected)
 	}
 }
 
