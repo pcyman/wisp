@@ -22,7 +22,17 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 	if err != nil {
 		return 1, err
 	}
+	// Scope host subprocess environments to this run without changing the App
+	// used by other commands. Passthrough values belong only in the override.
+	scoped := *a
+	scoped.deps.Environment = withoutPassthrough(a.deps.Environment, plan.SandboxEnvironment)
+	scoped.docker = docker.NewClientWithEnvironment(a.deps.Runner, scoped.deps.Environment)
+	a = &scoped
 	a.recordStartupTiming("host.plan.ready")
+	childEnvironment := a.childEnvironment
+	redact := func(err error) error {
+		return a.redact(err, plan.Environment, plan.SandboxEnvironment)
+	}
 	for _, warning := range plan.Warnings {
 		fmt.Fprintf(a.deps.Stderr, "warning: %s\n", warning)
 	}
@@ -107,7 +117,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 				return docker.Override{}, err
 			}
 		}
-		return docker.NewRunOverride(plan.Command, credentials, append(sandboxMounts, gitMounts...))
+		return docker.NewRunOverride(plan.Command, credentials, append(sandboxMounts, gitMounts...), plan.SandboxEnvironment)
 	})
 	if err != nil {
 		return 1, err
@@ -132,9 +142,9 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 			// Use a non-secret placeholder before generating the per-run token.
 			cleanupEnvironment["WISP_AWS_AUTHORIZATION_TOKEN"] = cleanupAuthorizationPlaceholder
 		}
-		invocation.Environment = a.childEnvironment(cleanupEnvironment)
+		invocation.Environment = childEnvironment(cleanupEnvironment)
 		if _, stderr, err := a.docker.ComposeCapture(ctx, invocation, "down", "--remove-orphans"); err != nil {
-			return 1, fmt.Errorf("clean stale Compose resources: %s: %w", string(stderr), err)
+			return 1, redact(fmt.Errorf("clean stale Compose resources: %s: %w", string(stderr), err))
 		}
 	}
 	if plan.AWSEnabled {
@@ -142,7 +152,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 			return 1, err
 		}
 	}
-	invocation.Environment = a.childEnvironment(plan.Environment)
+	invocation.Environment = childEnvironment(plan.Environment)
 	images := []docker.Image{{Service: "sandbox", Name: plan.Images.Sandbox}}
 	if plan.AWSEnabled {
 		images = append(images, docker.Image{Service: "credentials", Name: plan.Images.Credentials})
@@ -152,7 +162,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 		Invocation: invocation, LockRoot: runtimeRoot, UID: plan.UID, CPUs: plan.BuildCPUs, Rebuild: plan.Rebuild,
 		Images: images,
 	}); err != nil {
-		return 1, a.redact(err, plan.Environment)
+		return 1, redact(err)
 	}
 	a.recordStartupTiming("host.images.ready")
 	if plan.AgentKey == "pi" {
@@ -171,7 +181,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 		// cannot retag the service between cache selection and container creation.
 		plan.Environment["WISP_IMAGE"] = imageID
 		plan.Environment["WISP_PI_JITI_CACHE_KEY"] = cacheKey
-		invocation.Environment = a.childEnvironment(plan.Environment)
+		invocation.Environment = childEnvironment(plan.Environment)
 		a.recordStartupTiming("host.pi_jiti_cache.keyed")
 	}
 
@@ -183,7 +193,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), a.deps.CleanupTimeout)
 		defer cancel()
 		cleanupErr := a.cleanupComposeProject(cleanupCtx, invocation, plan.Project.Hash, plan.UID, map[string]bool{"sandbox": true, "credentials": true}, plan.Project.ContainerName)
-		status, resultErr = cleanupResult(status, resultErr, a.redact(cleanupErr, plan.Environment), a.deps.Stderr)
+		status, resultErr = cleanupResult(status, resultErr, redact(cleanupErr), a.deps.Stderr)
 	}()
 
 	if plan.AWSEnabled {
@@ -195,9 +205,9 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 			logs, logErrors, _ := a.docker.ComposeCapture(logCtx, invocation, "logs", "--no-color", "--tail", "100", "credentials")
 			cancel()
 			if len(logs)+len(logErrors) > 0 {
-				_, _ = fmt.Fprint(a.deps.Stderr, a.redactText(string(append(logs, logErrors...)), plan.Environment))
+				_, _ = fmt.Fprint(a.deps.Stderr, a.redactText(string(append(logs, logErrors...)), plan.Environment, plan.SandboxEnvironment))
 			}
-			return 1, a.redact(fmt.Errorf("start AWS credential broker: %w; verify the configured or default AWS credential source", err), plan.Environment)
+			return 1, redact(fmt.Errorf("start AWS credential broker: %w; verify the configured or default AWS credential source", err))
 		}
 		a.recordStartupTiming("host.credentials.ready")
 	}
@@ -213,7 +223,7 @@ func (a *App) run(ctx context.Context, request cli.RunRequest) (status int, resu
 	err = a.docker.ComposeAttachedIO(ctx, invocation, a.deps.Stdin, a.deps.Stdout, a.deps.Stderr, args...)
 	a.recordStartupTiming("host.sandbox.exit")
 	if err != nil {
-		return process.ExitCode(err, signalStatus(ctx, 1)), a.redact(err, plan.Environment)
+		return process.ExitCode(err, signalStatus(ctx, 1)), redact(err)
 	}
 	return 0, nil
 }

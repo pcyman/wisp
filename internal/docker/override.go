@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 )
 
 // Mount is encoded as a long-form Compose bind mount. This safely supports
@@ -50,7 +51,7 @@ func Bind(source, target string, readOnly bool) (Mount, error) {
 }
 
 // NewRunOverride creates the credentials and sandbox service overrides.
-func NewRunOverride(command []string, credentialMounts, sandboxMounts []Mount) (Override, error) {
+func NewRunOverride(command []string, credentialMounts, sandboxMounts []Mount, sandboxEnvironment map[string]string) (Override, error) {
 	if len(command) == 0 {
 		return Override{}, fmt.Errorf("sandbox command is empty")
 	}
@@ -73,6 +74,21 @@ func NewRunOverride(command []string, credentialMounts, sandboxMounts []Mount) (
 		}
 		sandbox.DependsOn = map[string]Dependency{"credentials": {Condition: "service_healthy"}}
 		sandbox.NetworkMode = "service:credentials"
+		services["sandbox"] = sandbox
+	}
+	sandbox := services["sandbox"]
+	if len(sandboxEnvironment) > 0 {
+		if sandbox.Environment == nil {
+			sandbox.Environment = make(map[string]string, len(sandboxEnvironment))
+		}
+		for key, value := range sandboxEnvironment {
+			if _, exists := sandbox.Environment[key]; exists {
+				return Override{}, fmt.Errorf("sandbox environment name %q conflicts with AWS settings", key)
+			}
+			// Compose interpolates YAML values, including JSON string values.
+			// Escape every dollar sign so host values remain literal.
+			sandbox.Environment[key] = strings.ReplaceAll(value, "$", "$$")
+		}
 		services["sandbox"] = sandbox
 	}
 	return Override{Services: services}, nil

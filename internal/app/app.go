@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -159,20 +161,41 @@ func cloneEnvironment(source map[string]string) map[string]string {
 	return cloned
 }
 
-func (a *App) redact(err error, environment map[string]string) error {
+func (a *App) redact(err error, environment map[string]string, sensitive ...map[string]string) error {
 	if err == nil {
 		return nil
 	}
-	return fmt.Errorf("%s", a.redactText(err.Error(), environment))
+	return fmt.Errorf("%s", a.redactText(err.Error(), environment, sensitive...))
 }
 
-func (a *App) redactText(message string, environment map[string]string) string {
+func (a *App) redactText(message string, environment map[string]string, sensitive ...map[string]string) string {
+	var secrets []string
 	for _, key := range []string{"WISP_AWS_AUTHORIZATION_TOKEN", "WISP_AZURE_CLIENT_SECRET"} {
 		if secret := environment[key]; secret != "" {
-			message = strings.ReplaceAll(message, secret, "[REDACTED]")
+			secrets = append(secrets, secret)
 		}
 	}
-	return message
+	for _, values := range sensitive {
+		for _, value := range values {
+			if value != "" {
+				// Diagnostics may quote the private JSON override or show its
+				// Compose-escaped value rather than the original host value.
+				for _, variant := range []string{value, strings.ReplaceAll(value, "$", "$$")} {
+					secrets = append(secrets, variant)
+					quoted, _ := json.Marshal(variant)
+					secrets = append(secrets, string(quoted[1:len(quoted)-1]))
+				}
+			}
+		}
+	}
+	// A shorter value may be a substring of another secret. Replace longest
+	// first, and use one replacer so replacement text is never redacted again.
+	sort.Slice(secrets, func(i, j int) bool { return len(secrets[i]) > len(secrets[j]) })
+	pairs := make([]string, 0, len(secrets)*2)
+	for _, secret := range secrets {
+		pairs = append(pairs, secret, "[REDACTED]")
+	}
+	return strings.NewReplacer(pairs...).Replace(message)
 }
 
 func (a *App) addAuthorizationToken(environment map[string]string) error {

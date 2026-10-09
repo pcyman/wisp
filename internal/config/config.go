@@ -12,14 +12,15 @@ const (
 
 // RawConfig preserves whether scalar TOML keys were present.
 type RawConfig struct {
-	SchemaVersion *int               `toml:"schema_version"`
-	Images        *RawImageConfig    `toml:"images"`
-	Build         *RawBuildConfig    `toml:"build"`
-	Agent         *RawAgentConfig    `toml:"agent"`
-	OpenCode      *RawOpenCodeConfig `toml:"opencode"`
-	Pi            *RawPiConfig       `toml:"pi"`
-	AWS           *RawAWSConfig      `toml:"aws"`
-	Mounts        []RawMountConfig   `toml:"mounts"`
+	SchemaVersion  *int               `toml:"schema_version"`
+	EnvPassthrough []string           `toml:"env_passthrough"`
+	Images         *RawImageConfig    `toml:"images"`
+	Build          *RawBuildConfig    `toml:"build"`
+	Agent          *RawAgentConfig    `toml:"agent"`
+	OpenCode       *RawOpenCodeConfig `toml:"opencode"`
+	Pi             *RawPiConfig       `toml:"pi"`
+	AWS            *RawAWSConfig      `toml:"aws"`
+	Mounts         []RawMountConfig   `toml:"mounts"`
 }
 
 type RawImageConfig struct {
@@ -83,15 +84,16 @@ type RawMountConfig struct {
 // Config is the defaulted, validated configuration used by the application.
 // Host paths become physical paths after ValidateHostPaths is called.
 type Config struct {
-	SchemaVersion int
-	Images        ImageConfig
-	Build         BuildConfig
-	Agent         AgentConfig
-	OpenCode      OpenCodeConfig
-	Pi            PiConfig
-	Hunk          HunkConfig
-	AWS           AWSConfig
-	Mounts        []MountConfig
+	SchemaVersion  int
+	EnvPassthrough []string
+	Images         ImageConfig
+	Build          BuildConfig
+	Agent          AgentConfig
+	OpenCode       OpenCodeConfig
+	Pi             PiConfig
+	Hunk           HunkConfig
+	AWS            AWSConfig
+	Mounts         []MountConfig
 }
 
 type ImageConfig struct {

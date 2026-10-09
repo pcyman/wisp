@@ -9,6 +9,9 @@ import (
 
 const InitialConfig = `schema_version = 1
 
+# Forward only these host variables to the agent sandbox (may expose secrets).
+# env_passthrough = ["GITHUB_TOKEN", "MY_API_KEY"]
+
 [images]
 sandbox = "wisp:local"
 credentials = "wisp-credentials:local"

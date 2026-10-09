@@ -150,6 +150,11 @@ func Resolve(raw RawConfig) (Config, error) {
 		}
 	}
 
+	if err := validateEnvPassthrough(raw.EnvPassthrough); err != nil {
+		return Config{}, err
+	}
+	cfg.EnvPassthrough = append([]string(nil), raw.EnvPassthrough...)
+
 	cfg.Mounts = make([]MountConfig, 0, len(raw.Mounts))
 	for i, mount := range raw.Mounts {
 		resolved, err := resolveMount(i, mount)

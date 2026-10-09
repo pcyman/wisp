@@ -78,6 +78,7 @@ type SandboxPlan struct {
 	SharedPiProfile     bool
 	PiProfilePath       string
 	Environment         map[string]string
+	SandboxEnvironment  map[string]string
 	RuntimeDirectories  RuntimeDirectories
 	Warnings            []config.Warning
 }
@@ -114,13 +115,14 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 		return SandboxPlan{}, err
 	}
 
+	sandboxEnvironment := planEnvPassthrough(loaded.Config.EnvPassthrough, options.ProcessEnv)
 	var gitRoot project.GitRootFunc
 	if options.Runner != nil {
 		gitRoot = func(ctx context.Context, dir string) (string, error) {
 			stdout, _, err := options.Runner.Capture(ctx, process.Command{
 				Path: "git",
 				Args: []string{"-C", dir, "rev-parse", "--show-toplevel"},
-				Env:  docker.SanitizeEnvironment(options.ProcessEnv, nil),
+				Env:  docker.SanitizeEnvironment(withoutPassthrough(options.ProcessEnv, sandboxEnvironment), nil),
 			})
 			return string(stdout), err
 		}
@@ -261,6 +263,7 @@ func PlanRun(ctx context.Context, request cli.RunRequest, options PlanOptions) (
 		SharedPiProfile:     sharedPiProfile,
 		PiProfilePath:       loaded.Config.Pi.ConfigPath,
 		Environment:         environment,
+		SandboxEnvironment:  sandboxEnvironment,
 		RuntimeDirectories:  directories,
 		Warnings:            append([]config.Warning(nil), loaded.Warnings...),
 	}, nil

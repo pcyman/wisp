@@ -18,7 +18,7 @@ func TestRunOverrideAndInvocationFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	override, err := NewRunOverride([]string{"opencode"}, []Mount{credential}, []Mount{project})
+	override, err := NewRunOverride([]string{"opencode"}, []Mount{credential}, []Mount{project}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestCredentialsOverrideOmitsSandbox(t *testing.T) {
 
 func TestRunOverrideEnablesAWSOnlyWithCredentialMounts(t *testing.T) {
 	project, _ := Bind("/project", "/workspace/current", false)
-	disabled, err := NewRunOverride([]string{"opencode"}, nil, []Mount{project})
+	disabled, err := NewRunOverride([]string{"opencode"}, nil, []Mount{project}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestRunOverrideEnablesAWSOnlyWithCredentialMounts(t *testing.T) {
 	}
 
 	config, _ := Bind("/config", "/run/wisp/config.toml", true)
-	enabled, err := NewRunOverride([]string{"opencode"}, []Mount{config}, []Mount{project})
+	enabled, err := NewRunOverride([]string{"opencode"}, []Mount{config}, []Mount{project}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
